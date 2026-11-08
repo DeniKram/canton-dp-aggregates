@@ -41,23 +41,24 @@ exact volume on **~49%** of days (the days only one other dealer traded).
 | unit | error of published total | victim days recovered within ±10% |
 |---|---|---|
 | none (exact) | 0% | 100% |
-| `trade` | **3.8%** | 47% |
-| `dealer_day` | 43% | **5.6%** |
+| `trade` | **6.3%** | 42% |
+| `dealer_day` | 43% | **5.7%** |
 
 Plotted as error against leakage, both units trace the **same curve**: a dealer's exposure
 depends only on the noise scale relative to its volume. Trade-level ε = 1 (Δ = 1M) adds the same
-noise as dealer-level ε = 12, so for a dealer's day it is a weak guarantee in disguise. Choosing a
-setting means choosing a point on that curve; publish the noise scale with every release, not only ε.
+noise as dealer-level ε = 12, so for a dealer's day it is a weak guarantee in disguise. Clipping adds
+a floor: trade-level releases cannot get closer than ~4% to the true total. All errors here are measured
+against the true, unclipped totals.
 
 ![fig1](results/fig1_epsilon_tradeoff.png)
 
 **3. Dealer-level privacy gets affordable as the market grows** (ε = 1, daily):
-3 dealers → 42% error, 10 → 13%, 20 → **6.3%**, 50 → 2.5%.
+3 dealers → 42% error, 10 → 13%, 20 → **6.3%**, 50 → 2.6%.
 
 ![fig2](results/fig2_market_size.png)
 
-**4. Coarser releases are nearly free for trade-level privacy.** Same ε = 1:
-daily total 3.7% error → monthly total **0.2%**.
+**4. Coarser releases help, if the clip bound is retuned.** Same ε = 1, trade level:
+daily total 6.1% error → monthly total **0.9%** with a 2M clip bound (a month accumulates clipping bias).
 
 **5. Without a budget, noise can be averaged away.** Re-querying the same total 100 times
 cuts the attacker's error from ~960k to ~114k USD (√k law). An accountant with Σε ≤ 5 blocks
@@ -68,14 +69,18 @@ single operator can quietly exceed it.
 
 **6. Daily snapshots of running totals need continual-release DP.** A cap-table feed that
 publishes total shares every day reveals each new grant as the day-over-day difference (100%).
-Adding Lap(C/ε) to every snapshot *looks* cheap (0.3% error at "ε = 5") but each grant sits in
+Adding Lap(C/ε) to every snapshot *looks* cheap (2.4% error at "ε = 5") but each grant sits in
 every later snapshot, so the real cost is 64·ε, and an attacker who averages snapshots recovers
-46% of grants. With the budget honestly accounted (ε = 5 over 64 days):
+30% of grants. With the budget honestly accounted (ε = 5 over 64 days):
 
 | mechanism | error of published total | grants recovered (strong attack) |
 |---|---|---|
-| noise split evenly over days | 17.0% | 1.0% |
-| **binary-tree mechanism** | **3.9%** | 2.4% |
+| noise split evenly over days | 17.0% | 1.6% |
+| **binary-tree mechanism** | **4.8%** | 2.1% |
+
+**7. The clip bound trades bias against noise.** Cap table, tree, ε = 5: bound 50k → 5.4% error,
+100k → 4.5%, 200k → 4.8%, 1M → 19%. Choose it from public or earlier-period data, never from the
+released data itself.
 
 ![fig4](results/fig4_cap_table.png)
 

@@ -20,6 +20,7 @@ from . import attacks, captable, dp
 from .data import MarketConfig, generate
 
 TRADE_CLIP = 1_000_000.0       # privacy unit "trade": hide any single trade up to 1M
+MONTHLY_TRADE_CLIP = 2_000_000.0  # a monthly sum tolerates a larger bound: less clipping bias
 DEALER_DAY_CLIP = 12_000_000.0  # privacy unit "dealer_day": hide a dealer's whole day up to 12M
 EPSILONS = [0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0]
 
@@ -55,18 +56,20 @@ def e2_epsilon_sweep(seeds: int, dealers: int = 3) -> pd.DataFrame:
                 rng = np.random.default_rng(10_000 + s)
                 m = generate(replace(MarketConfig(), dealers=dealers), rng)
                 contrib = dp.clipped_dealer_day(m, unit, clip)                     # (T, D)
-                truth = contrib.sum(axis=1)                                        # (T,)
-                pub = truth + dp.laplace_noise(clip, eps, rng, size=truth.shape)  # (T,)
+                clipped = contrib.sum(axis=1)                                      # (T,)
+                pub = clipped + dp.laplace_noise(clip, eps, rng, size=clipped.shape)  # (T,)
+                truth = m.daily_total                                              # (T,) unclipped
                 errs.append(np.median(np.abs(pub - truth) / truth))
                 est = attacks.coalition_attack(pub, contrib, victim=0)             # (T,)
-                recs.append(attacks.recovery_rate(est, contrib[:, 0]))
+                recs.append(attacks.recovery_rate(est, m.dealer_day[:, 0]))       # vs TRUE volume
             rows.append({"unit": unit, "epsilon": eps, "median_rel_error": np.mean(errs), "victim_recovered": np.mean(recs)})
     return pd.DataFrame(rows)
 
 
 # --------------------------------------------------------------- E3 granularity
 def e3_granularity(seeds: int, epsilon: float = 1.0) -> pd.DataFrame:
-    """Same ε, daily vs monthly release. Monthly sums are ~22x larger, noise is the same."""
+    """Same ε, daily vs monthly release. Monthly sums are ~22x larger; for the trade unit the
+    monthly release uses a larger clip bound (2M), since a month accumulates clipping bias."""
     rows = []
     for unit in ("trade", "dealer_day"):
         clip = _clip_for(unit)
@@ -74,11 +77,17 @@ def e3_granularity(seeds: int, epsilon: float = 1.0) -> pd.DataFrame:
         for s in range(seeds):
             rng = np.random.default_rng(20_000 + s)
             m = generate(MarketConfig(), rng)
-            daily = dp.clipped_daily_total(m, unit, clip)
-            d_err.append(np.median(np.abs(dp.laplace_noise(clip, epsilon, rng, size=daily.shape)) / daily))
+            clipped, truth = dp.clipped_daily_total(m, unit, clip), m.daily_total   # (T,), (T,)
+            d_pub = clipped + dp.laplace_noise(clip, epsilon, rng, size=clipped.shape)
+            d_err.append(np.median(np.abs(d_pub - truth) / truth))
             # monthly: one dealer contributes up to T*clip in dealer-month terms; for "trade" Δ stays clip
-            month_sens = clip if unit == "trade" else clip * m.config.days
-            m_err.append(abs(dp.laplace_noise(month_sens, epsilon, rng)) / daily.sum())
+            if unit == "trade":
+                m_clip = MONTHLY_TRADE_CLIP
+                m_sum, month_sens = dp.clipped_daily_total(m, unit, m_clip).sum(), m_clip
+            else:
+                m_sum, month_sens = clipped.sum(), clip * m.config.days
+            m_pub = m_sum + dp.laplace_noise(month_sens, epsilon, rng)
+            m_err.append(abs(m_pub - truth.sum()) / truth.sum())
         rows.append({"unit": unit, "release": "daily", "median_rel_error": np.mean(d_err)})
         rows.append({"unit": unit, "release": "monthly", "median_rel_error": np.mean(m_err)})
     return pd.DataFrame(rows)
@@ -93,8 +102,9 @@ def e4_dealers(seeds: int, epsilon: float = 1.0) -> pd.DataFrame:
         for s in range(seeds):
             rng = np.random.default_rng(30_000 + s)
             m = generate(replace(MarketConfig(), dealers=n), rng)
-            truth = dp.clipped_daily_total(m, "dealer_day", DEALER_DAY_CLIP)
-            errs.append(np.median(np.abs(dp.laplace_noise(DEALER_DAY_CLIP, epsilon, rng, size=truth.shape)) / truth))
+            clipped, truth = dp.clipped_daily_total(m, "dealer_day", DEALER_DAY_CLIP), m.daily_total
+            pub = clipped + dp.laplace_noise(DEALER_DAY_CLIP, epsilon, rng, size=clipped.shape)
+            errs.append(np.median(np.abs(pub - truth) / truth))
         rows.append({"dealers": n, "median_rel_error": np.mean(errs)})
     return pd.DataFrame(rows)
 
@@ -125,10 +135,11 @@ def e5_averaging(seeds: int, epsilon: float = 1.0, budget: float = 5.0) -> pd.Da
 GRANT_CLIP = 200_000.0  # privacy unit "one grant": a day's new shares clipped at 200k
 
 
-def _publish(mode: str, x: np.ndarray, start: float, eps: float, days: int, rng: np.random.Generator) -> np.ndarray:
+def _publish(mode: str, x: np.ndarray, start: float, eps: float, days: int, rng: np.random.Generator,
+             raw: np.ndarray | None = None) -> np.ndarray:
+    if mode == "exact":           # the real, unclipped running total
+        return start + np.cumsum(raw if raw is not None else x)
     truth = start + np.cumsum(x)
-    if mode == "exact":
-        return truth
     if mode == "naive-per-day":   # ε per snapshot, never accounted: real cost days·ε
         return truth + dp.laplace_noise(GRANT_CLIP, eps, rng, size=truth.shape)
     if mode == "naive-split":     # honest: ε split over all snapshots
@@ -150,15 +161,17 @@ def e6_cap_table(seeds: int) -> pd.DataFrame:
             for s in range(seeds):
                 rng = np.random.default_rng(50_000 + s)
                 daily, one = captable.single_grant_days(cfg, rng)
-                x = np.minimum(daily, GRANT_CLIP)                                   # (T,)
-                truth = cfg.initial_shares + np.cumsum(x)                           # (T,)
-                pub = _publish(mode, x, cfg.initial_shares, eps, cfg.days, rng)     # (T,)
+                x = np.minimum(daily, GRANT_CLIP)                                   # (T,) clipped
+                truth = cfg.initial_shares + np.cumsum(daily)                       # (T,) unclipped
+                pub = _publish(mode, x, cfg.initial_shares, eps, cfg.days, rng, raw=daily)  # (T,)
                 errs.append(np.median(np.abs(pub - truth) / truth))
                 diff = attacks.snapshot_diff_attack(pub, cfg.initial_shares)
-                for t in np.where(one & (x > 0))[0]:
-                    others = cfg.initial_shares + np.cumsum(np.where(np.arange(cfg.days) == t, 0.0, x))
-                    simple.append(abs(diff[t] - x[t]) <= 0.1 * x[t])
-                    strong.append(abs(attacks.snapshot_jump_attack(pub, others, int(t)) - x[t]) <= 0.1 * x[t])
+                contrib = daily if mode == "exact" else x   # what each grant adds to what was published
+                for t in np.where(one & (daily > 0))[0]:
+                    others = cfg.initial_shares + np.cumsum(np.where(np.arange(cfg.days) == t, 0.0, contrib))
+                    g = daily[t]                             # the TRUE grant the attacker wants
+                    simple.append(abs(diff[t] - g) <= 0.1 * g)
+                    strong.append(abs(attacks.snapshot_jump_attack(pub, others, int(t)) - g) <= 0.1 * g)
             rows.append({
                 "mechanism": mode,
                 "eps_claimed": float("inf") if mode == "exact" else eps,
@@ -167,6 +180,36 @@ def e6_cap_table(seeds: int) -> pd.DataFrame:
                 "recovered_simple": np.mean(simple),
                 "recovered_strong": np.mean(strong),
             })
+    return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------- E7 clipping
+def e7_clipping(seeds: int) -> pd.DataFrame:
+    """Clip bound C trades bias (large contributions cut) against noise (Lap scale grows with C).
+    Error is measured against the TRUE (unclipped) total."""
+    rows = []
+    cfg = captable.CapTableConfig()
+    for C in (50e3, 100e3, 200e3, 500e3, 1e6):
+        errs, bias = [], []
+        for s in range(seeds):
+            rng = np.random.default_rng(50_000 + s)  # same markets as E6
+            daily, _ = captable.single_grant_days(cfg, rng)
+            x = np.minimum(daily, C)
+            truth = cfg.initial_shares + np.cumsum(daily)
+            pub = cfg.initial_shares + captable.tree_prefix_sums(x, C, 5.0, rng)
+            errs.append(np.median(np.abs(pub - truth) / truth))
+            bias.append(np.median((truth - cfg.initial_shares - np.cumsum(x)) / truth))
+        rows.append({"case": "cap table, tree, eps=5", "clip": C, "median_rel_error": np.mean(errs), "clip_bias": np.mean(bias)})
+    for C in (0.25e6, 0.5e6, 1e6, 2e6, 5e6):
+        errs, bias = [], []
+        for s in range(seeds):
+            rng = np.random.default_rng(70_000 + s)
+            m = generate(MarketConfig(), rng)
+            clipped, truth = dp.clipped_daily_total(m, "trade", C), m.daily_total
+            pub = clipped + dp.laplace_noise(C, 1.0, rng, size=clipped.shape)
+            errs.append(np.median(np.abs(pub - truth) / truth))
+            bias.append(np.median((truth - clipped) / truth))
+        rows.append({"case": "3 dealers, trade unit, eps=1", "clip": C, "median_rel_error": np.mean(errs), "clip_bias": np.mean(bias)})
     return pd.DataFrame(rows)
 
 
@@ -237,6 +280,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e4_dealers": e4_dealers(seeds),
         "e5_averaging": e5_averaging(seeds),
         "e6_cap_table": e6_cap_table(seeds),
+        "e7_clipping": e7_clipping(seeds),
     }
     for name, df in res.items():
         df.to_csv(out / f"{name}.csv", index=False)

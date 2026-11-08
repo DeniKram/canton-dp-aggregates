@@ -1,5 +1,5 @@
 unit,release,median_rel_error
-trade,daily,0.03650002784847345
-trade,monthly,0.0021183983328201695
-dealer_day,daily,0.41629954456087126
-dealer_day,monthly,0.5307142745486143
+trade,daily,0.060950492265649955
+trade,monthly,0.008839683102567225
+dealer_day,daily,0.4156347083922287
+dealer_day,monthly,0.5290126739805088

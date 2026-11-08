@@ -6,35 +6,35 @@ single insider, 60% participation     0.4948
 
 == e2_epsilon_sweep
       unit  epsilon  median_rel_error  victim_recovered
-     trade     0.10            0.3782            0.0639
-     trade     0.25            0.1513            0.1470
-     trade     0.50            0.0756            0.2668
-     trade     1.00            0.0378            0.4664
-     trade     2.00            0.0189            0.7007
-     trade     5.00            0.0076            0.9355
-     trade    10.00            0.0038            0.9923
-dealer_day     0.10            4.3055            0.0091
-dealer_day     0.25            1.7222            0.0148
-dealer_day     0.50            0.8611            0.0264
-dealer_day     1.00            0.4306            0.0564
-dealer_day     2.00            0.2153            0.1073
-dealer_day     5.00            0.0861            0.2389
-dealer_day    10.00            0.0431            0.4202
+     trade     0.10            0.3637            0.0659
+     trade     0.25            0.1575            0.1545
+     trade     0.50            0.0923            0.2559
+     trade     1.00            0.0634            0.4202
+     trade     2.00            0.0503            0.5923
+     trade     5.00            0.0441            0.7689
+     trade    10.00            0.0425            0.8200
+dealer_day     0.10            4.2959            0.0093
+dealer_day     0.25            1.7185            0.0150
+dealer_day     0.50            0.8593            0.0264
+dealer_day     1.00            0.4301            0.0570
+dealer_day     2.00            0.2153            0.1080
+dealer_day     5.00            0.0875            0.2395
+dealer_day    10.00            0.0447            0.4177
 
 == e3_granularity
       unit release  median_rel_error
-     trade   daily            0.0365
-     trade monthly            0.0021
-dealer_day   daily            0.4163
-dealer_day monthly            0.5307
+     trade   daily            0.0610
+     trade monthly            0.0088
+dealer_day   daily            0.4156
+dealer_day monthly            0.5290
 
 == e4_dealers
  dealers  median_rel_error
-       3            0.4234
-       5            0.2535
-      10            0.1283
-      20            0.0632
-      50            0.0253
+       3            0.4228
+       5            0.2528
+      10            0.1278
+      20            0.0634
+      50            0.0259
 
 == e5_averaging
  queries  mean_abs_error_usd  blocked_by_budget
@@ -49,15 +49,28 @@ dealer_day monthly            0.5307
 == e6_cap_table
     mechanism  eps_claimed  eps_actual  median_rel_error  recovered_simple  recovered_strong
         exact          inf         inf            0.0000            1.0000            1.0000
-naive-per-day          1.0        64.0            0.0133            0.0278            0.1131
-naive-per-day          2.0       128.0            0.0066            0.0574            0.2122
-naive-per-day          5.0       320.0            0.0027            0.1378            0.4619
-naive-per-day         10.0       640.0            0.0013            0.2678            0.6784
-  naive-split          1.0         1.0            0.8495            0.0006            0.0012
-  naive-split          2.0         2.0            0.4247            0.0006            0.0030
-  naive-split          5.0         5.0            0.1699            0.0012            0.0103
-  naive-split         10.0        10.0            0.0849            0.0018            0.0218
-         tree          1.0         1.0            0.1948            0.0060            0.0103
-         tree          2.0         2.0            0.0974            0.0115            0.0133
-         tree          5.0         5.0            0.0390            0.0230            0.0242
-         tree         10.0        10.0            0.0195            0.0490            0.0417
+naive-per-day          1.0        64.0            0.0299            0.0308            0.0840
+naive-per-day          2.0       128.0            0.0260            0.0562            0.1366
+naive-per-day          5.0       320.0            0.0241            0.0979            0.2987
+naive-per-day         10.0       640.0            0.0235            0.1699            0.4680
+  naive-split          1.0         1.0            0.8333            0.0006            0.0030
+  naive-split          2.0         2.0            0.4185            0.0024            0.0067
+  naive-split          5.0         5.0            0.1702            0.0024            0.0163
+  naive-split         10.0        10.0            0.0897            0.0024            0.0236
+         tree          1.0         1.0            0.1934            0.0073            0.0085
+         tree          2.0         2.0            0.1008            0.0133            0.0127
+         tree          5.0         5.0            0.0482            0.0187            0.0212
+         tree         10.0        10.0            0.0331            0.0429            0.0417
+
+== e7_clipping
+                        case      clip  median_rel_error  clip_bias
+      cap table, tree, eps=5   50000.0            0.0544     0.0528
+      cap table, tree, eps=5  100000.0            0.0450     0.0389
+      cap table, tree, eps=5  200000.0            0.0482     0.0229
+      cap table, tree, eps=5  500000.0            0.0967     0.0066
+      cap table, tree, eps=5 1000000.0            0.1907     0.0016
+3 dealers, trade unit, eps=1  250000.0            0.4214     0.4209
+3 dealers, trade unit, eps=1  500000.0            0.1881     0.1859
+3 dealers, trade unit, eps=1 1000000.0            0.0628     0.0432
+3 dealers, trade unit, eps=1 2000000.0            0.0742     0.0000
+3 dealers, trade unit, eps=1 5000000.0            0.1793     0.0000
