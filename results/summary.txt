@@ -1,0 +1,47 @@
+
+== e1_exact_publication
+                           attack  recovered
+       coalition (2 of 3 collude)     1.0000
+single insider, 60% participation     0.4948
+
+== e2_epsilon_sweep
+      unit  epsilon  median_rel_error  victim_recovered
+     trade     0.10            0.3782            0.0639
+     trade     0.25            0.1513            0.1470
+     trade     0.50            0.0756            0.2668
+     trade     1.00            0.0378            0.4664
+     trade     2.00            0.0189            0.7007
+     trade     5.00            0.0076            0.9355
+     trade    10.00            0.0038            0.9923
+dealer_day     0.10            4.3055            0.0091
+dealer_day     0.25            1.7222            0.0148
+dealer_day     0.50            0.8611            0.0264
+dealer_day     1.00            0.4306            0.0564
+dealer_day     2.00            0.2153            0.1073
+dealer_day     5.00            0.0861            0.2389
+dealer_day    10.00            0.0431            0.4202
+
+== e3_granularity
+      unit release  median_rel_error
+     trade   daily            0.0365
+     trade monthly            0.0021
+dealer_day   daily            0.4163
+dealer_day monthly            0.5307
+
+== e4_dealers
+ dealers  median_rel_error
+       3            0.4234
+       5            0.2535
+      10            0.1283
+      20            0.0632
+      50            0.0253
+
+== e5_averaging
+ queries  mean_abs_error_usd  blocked_by_budget
+       1         960815.3956                0.0
+       2         751515.6247                0.0
+       5         485721.3731                0.0
+      10         342497.7167                1.0
+      25         230837.9621                1.0
+      50         158118.8901                1.0
+     100         113539.9990                1.0
