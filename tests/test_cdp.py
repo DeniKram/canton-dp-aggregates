@@ -67,3 +67,32 @@ def test_sparse_insider_leaks_when_dealers_absent():
     m = generate(MarketConfig(participation=0.5), np.random.default_rng(4))
     r = attacks.insider_attack_sparse(m.daily_total, m, insider=0)
     assert r["leaked_days"] > 0 and r["recovered_within_10pct"] == r["leaked_days"]
+
+
+def test_tree_levels():
+    from cdp.captable import tree_levels
+    assert tree_levels(64) == 7 and tree_levels(1) == 1 and tree_levels(65) == 8
+
+
+def test_tree_prefix_sums_exact_without_noise():
+    from cdp.captable import tree_prefix_sums
+    x = np.arange(1.0, 38.0)  # odd length, not a power of two
+    out = tree_prefix_sums(x, sensitivity=1.0, epsilon=1e12, rng=np.random.default_rng(5))
+    assert np.allclose(out, np.cumsum(x), atol=1e-6)
+
+
+def test_tree_noise_grows_like_log_not_linear():
+    from cdp.captable import tree_prefix_sums
+    rng = np.random.default_rng(6)
+    x = np.zeros(64)
+    err = np.mean([np.abs(tree_prefix_sums(x, 1.0, 1.0, rng)).mean() for _ in range(200)])
+    naive_split = 64 * 1.0  # mean |Lap(64)|
+    assert err < naive_split / 2
+
+
+def test_snapshot_attacks_exact():
+    x = np.array([0.0, 5.0, 0.0, 7.0])
+    pub = 100 + np.cumsum(x)
+    assert np.allclose(attacks.snapshot_diff_attack(pub, 100.0), x)
+    others = 100 + np.cumsum(np.array([0.0, 5.0, 0.0, 0.0]))
+    assert attacks.snapshot_jump_attack(pub, others, 3) == pytest.approx(7.0)

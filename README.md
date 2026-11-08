@@ -12,8 +12,8 @@ enforces the privacy budget on-ledger (Dev Fund RFP *Public verifiability*).
 
 ```bash
 pip install -e ".[dev]"
-pytest                                            # 8 tests
-PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~5 s
+pytest                                            # 12 tests
+PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~6 s
 ```
 
 ## Setup
@@ -66,6 +66,19 @@ single operator can quietly exceed it.
 
 ![fig3](results/fig3_averaging_attack.png)
 
+**6. Daily snapshots of running totals need continual-release DP.** A cap-table feed that
+publishes total shares every day reveals each new grant as the day-over-day difference (100%).
+Adding Lap(C/ε) to every snapshot *looks* cheap (0.3% error at "ε = 5") but each grant sits in
+every later snapshot, so the real cost is 64·ε, and an attacker who averages snapshots recovers
+46% of grants. With the budget honestly accounted (ε = 5 over 64 days):
+
+| mechanism | error of published total | grants recovered (strong attack) |
+|---|---|---|
+| noise split evenly over days | 17.0% | 1.0% |
+| **binary-tree mechanism** | **3.9%** | 2.4% |
+
+![fig4](results/fig4_cap_table.png)
+
 ## What this suggests for Canton
 
 - Publish trade-level DP aggregates **daily** and dealer-level DP aggregates only for
@@ -81,7 +94,8 @@ single operator can quietly exceed it.
 src/cdp/
   data.py         synthetic market generator; shapes (T, D)
   dp.py           clipping, Laplace mechanism, PrivacyAccountant
-  attacks.py      coalition, sparse-insider and averaging attacks
+  attacks.py      coalition, sparse-insider, averaging and snapshot attacks
+  captable.py     cap-table model + binary-tree continual release
   experiments.py  E1–E5 → CSV + figures in results/
 tests/test_cdp.py
 ```

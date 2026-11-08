@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import attacks, dp
+from . import attacks, captable, dp
 from .data import MarketConfig, generate
 
 TRADE_CLIP = 1_000_000.0       # privacy unit "trade": hide any single trade up to 1M
@@ -121,6 +121,55 @@ def e5_averaging(seeds: int, epsilon: float = 1.0, budget: float = 5.0) -> pd.Da
     return pd.DataFrame(rows)
 
 
+# --------------------------------------------------------------- E6 cap table
+GRANT_CLIP = 200_000.0  # privacy unit "one grant": a day's new shares clipped at 200k
+
+
+def _publish(mode: str, x: np.ndarray, start: float, eps: float, days: int, rng: np.random.Generator) -> np.ndarray:
+    truth = start + np.cumsum(x)
+    if mode == "exact":
+        return truth
+    if mode == "naive-per-day":   # ε per snapshot, never accounted: real cost days·ε
+        return truth + dp.laplace_noise(GRANT_CLIP, eps, rng, size=truth.shape)
+    if mode == "naive-split":     # honest: ε split over all snapshots
+        return truth + dp.laplace_noise(GRANT_CLIP * days, eps, rng, size=truth.shape)
+    if mode == "tree":            # honest: binary-tree continual release
+        return start + captable.tree_prefix_sums(x, GRANT_CLIP, eps, rng)
+    raise ValueError(mode)
+
+
+def e6_cap_table(seeds: int) -> pd.DataFrame:
+    """Daily cap-table totals (64 days). Error of the published total vs share of single-grant days
+    whose grant size an attacker recovers within ±10%, with a simple (day-over-day) and a strong
+    (knows all other grants, averages) attack."""
+    cfg = captable.CapTableConfig()
+    rows = []
+    for mode in ("exact", "naive-per-day", "naive-split", "tree"):
+        for eps in ([1.0] if mode == "exact" else [1.0, 2.0, 5.0, 10.0]):
+            errs, simple, strong = [], [], []
+            for s in range(seeds):
+                rng = np.random.default_rng(50_000 + s)
+                daily, one = captable.single_grant_days(cfg, rng)
+                x = np.minimum(daily, GRANT_CLIP)                                   # (T,)
+                truth = cfg.initial_shares + np.cumsum(x)                           # (T,)
+                pub = _publish(mode, x, cfg.initial_shares, eps, cfg.days, rng)     # (T,)
+                errs.append(np.median(np.abs(pub - truth) / truth))
+                diff = attacks.snapshot_diff_attack(pub, cfg.initial_shares)
+                for t in np.where(one & (x > 0))[0]:
+                    others = cfg.initial_shares + np.cumsum(np.where(np.arange(cfg.days) == t, 0.0, x))
+                    simple.append(abs(diff[t] - x[t]) <= 0.1 * x[t])
+                    strong.append(abs(attacks.snapshot_jump_attack(pub, others, int(t)) - x[t]) <= 0.1 * x[t])
+            rows.append({
+                "mechanism": mode,
+                "eps_claimed": float("inf") if mode == "exact" else eps,
+                "eps_actual": float("inf") if mode == "exact" else (eps * cfg.days if mode == "naive-per-day" else eps),
+                "median_rel_error": np.mean(errs),
+                "recovered_simple": np.mean(simple),
+                "recovered_strong": np.mean(strong),
+            })
+    return pd.DataFrame(rows)
+
+
 # --------------------------------------------------------------- plots
 def _plot_eps(df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(1, 2, figsize=(11, 4))
@@ -165,6 +214,20 @@ def _plot_averaging(df: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def _plot_cap_table(df: pd.DataFrame, out: Path) -> None:
+    fig, ax = plt.subplots(figsize=(6.5, 4))
+    for mode, style in (("naive-split", "o--"), ("tree", "o-")):
+        g = df[df.mechanism == mode]
+        ax.plot(g.eps_claimed, g.median_rel_error * 100, style, label=mode)
+    ax.set(xscale="log", yscale="log", xlabel="total privacy budget ε (honestly accounted)",
+           ylabel="median error of published total, %", title="Daily cap-table totals, 64 days")
+    ax.legend()
+    ax.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+    fig.savefig(out / "fig4_cap_table.png", dpi=150)
+    plt.close(fig)
+
+
 def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
     out.mkdir(parents=True, exist_ok=True)
     res = {
@@ -173,12 +236,14 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e3_granularity": e3_granularity(seeds),
         "e4_dealers": e4_dealers(seeds),
         "e5_averaging": e5_averaging(seeds),
+        "e6_cap_table": e6_cap_table(seeds),
     }
     for name, df in res.items():
         df.to_csv(out / f"{name}.csv", index=False)
     _plot_eps(res["e2_epsilon_sweep"], out)
     _plot_dealers(res["e4_dealers"], out)
     _plot_averaging(res["e5_averaging"], out)
+    _plot_cap_table(res["e6_cap_table"], out)
     return res
 
 

@@ -55,6 +55,21 @@ def insider_attack_sparse(published: np.ndarray, market: Market, insider: int = 
     return {"days": int(dd.shape[0]), "leaked_days": leaked, "recovered_within_10pct": exact}
 
 
+def snapshot_diff_attack(published: np.ndarray, start: float) -> np.ndarray:
+    """Day-over-day differences of published running totals = estimated daily inflow. (T,) -> (T,)"""
+    return np.diff(np.concatenate([[start], published]))
+
+
+def snapshot_jump_attack(published: np.ndarray, others_running: np.ndarray, t: int) -> float:
+    """Strong attacker who knows every other grant: subtract them, then compare the mean level
+    after day t with the mean level before it. Averages over many noisy snapshots, so it beats
+    independent per-day noise whose total budget was never accounted for.
+        published, others_running: (T,)  ->  estimated grant on day t
+    """
+    r = published - others_running
+    return float(r[t:].mean() - (r[:t].mean() if t > 0 else 0.0))
+
+
 def averaging_attack(true_value: float, noisy_answers: np.ndarray) -> float:
     """Mean of k noisy answers to the same query."""
     return float(np.mean(noisy_answers))

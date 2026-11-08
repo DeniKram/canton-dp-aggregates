@@ -45,3 +45,19 @@ dealer_day monthly            0.5307
       25         230837.9621                1.0
       50         158118.8901                1.0
      100         113539.9990                1.0
+
+== e6_cap_table
+    mechanism  eps_claimed  eps_actual  median_rel_error  recovered_simple  recovered_strong
+        exact          inf         inf            0.0000            1.0000            1.0000
+naive-per-day          1.0        64.0            0.0133            0.0278            0.1131
+naive-per-day          2.0       128.0            0.0066            0.0574            0.2122
+naive-per-day          5.0       320.0            0.0027            0.1378            0.4619
+naive-per-day         10.0       640.0            0.0013            0.2678            0.6784
+  naive-split          1.0         1.0            0.8495            0.0006            0.0012
+  naive-split          2.0         2.0            0.4247            0.0006            0.0030
+  naive-split          5.0         5.0            0.1699            0.0012            0.0103
+  naive-split         10.0        10.0            0.0849            0.0018            0.0218
+         tree          1.0         1.0            0.1948            0.0060            0.0103
+         tree          2.0         2.0            0.0974            0.0115            0.0133
+         tree          5.0         5.0            0.0390            0.0230            0.0242
+         tree         10.0        10.0            0.0195            0.0490            0.0417
