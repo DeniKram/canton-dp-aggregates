@@ -36,7 +36,7 @@ If 2 of 3 dealers compare notes, they recover the third dealer's daily volume on
 Even a single insider in a market where dealers trade on 60% of days recovers a competitor's
 exact volume on **~49%** of days (the days only one other dealer traded).
 
-**2. The privacy unit matters more than ε.** At ε = 1, daily releases, 3 dealers:
+**2. "ε = 1" means different protection depending on the privacy unit.** At ε = 1, daily releases, 3 dealers:
 
 | unit | error of published total | victim days recovered within ±10% |
 |---|---|---|
@@ -44,9 +44,10 @@ exact volume on **~49%** of days (the days only one other dealer traded).
 | `trade` | **3.8%** | 47% |
 | `dealer_day` | 43% | **5.6%** |
 
-Trade-level DP keeps the number useful but, by design, only hides individual trades:
-a dealer's daily volume is still visible half the time. Hiding whole dealer-days works,
-but with 3 dealers the noise is ~43% of the total.
+Plotted as error against leakage, both units trace the **same curve**: a dealer's exposure
+depends only on the noise scale relative to its volume. Trade-level ε = 1 (Δ = 1M) adds the same
+noise as dealer-level ε = 12, so for a dealer's day it is a weak guarantee in disguise. Choosing a
+setting means choosing a point on that curve; publish the noise scale with every release, not only ε.
 
 ![fig1](results/fig1_epsilon_tradeoff.png)
 
