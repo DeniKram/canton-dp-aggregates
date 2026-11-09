@@ -74,3 +74,23 @@ naive-per-day         10.0       640.0            0.0235            0.1699      
 3 dealers, trade unit, eps=1 1000000.0            0.0628     0.0432
 3 dealers, trade unit, eps=1 2000000.0            0.0742     0.0000
 3 dealers, trade unit, eps=1 5000000.0            0.1793     0.0000
+
+== e8_sensitivity_market
+                  scenario  trade_err  trade_leak  dealer_day_err  dealer_day_leak  dealer_day_err_20    C1   C2   C3
+                      base     0.0604      0.4118          0.4876           0.0450             0.0752  True True True
+        few trades (5/day)     0.1604      0.1500          0.4933           0.0523             0.0824 False True True
+      many trades (50/day)     0.0515      0.6855          0.4867           0.0536             0.0714  True True True
+   heavy tails (sigma 1.5)     0.3797      0.0859          0.5890           0.0395             0.0901 False True True
+ small trades (median 50k)     0.0604      0.4118          0.4876           0.0450             0.0752  True True True
+  large trades (median 1M)     0.0604      0.4118          0.4876           0.0450             0.0752  True True True
+sparse (60% participation)     0.0935      0.4418          0.8792           0.0489             0.1195  True True True
+
+== e8_sensitivity_cap_table
+                       scenario  tree_err  split_err  split_over_tree  perday_strong_leak   C4   C5
+                           base    0.0478     0.1708           3.5778              0.3002 True True
+         rare grants (0.05/day)    0.0429     0.1753           4.0873              0.2601 True True
+      frequent grants (0.4/day)    0.0665     0.1633           2.4545              0.2971 True True
+     uniform grants (sigma 0.5)    0.0382     0.1700           4.4548              0.4225 True True
+heavy-tailed grants (sigma 1.5)    0.0819     0.1833           2.2362              0.2167 True True
+        short horizon (32 days)    0.0416     0.0936           2.2527              0.2217 True True
+        long horizon (128 days)    0.0660     0.3118           4.7265              0.3659 True True

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import attacks, captable, dp
+from . import attacks, captable, dp, sensitivity
 from .data import MarketConfig, generate
 
 TRADE_CLIP = 1_000_000.0       # privacy unit "trade": hide any single trade up to 1M
@@ -282,6 +282,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e6_cap_table": e6_cap_table(seeds),
         "e7_clipping": e7_clipping(seeds),
     }
+    res["e8_sensitivity_market"], res["e8_sensitivity_cap_table"] = sensitivity.e8_sensitivity(min(seeds, 100))
     for name, df in res.items():
         df.to_csv(out / f"{name}.csv", index=False)
     _plot_eps(res["e2_epsilon_sweep"], out)

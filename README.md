@@ -12,7 +12,7 @@ enforces the privacy budget on-ledger (Dev Fund RFP *Public verifiability*).
 
 ```bash
 pip install -e ".[dev]"
-pytest                                            # 12 tests
+pytest                                            # 13 tests
 PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~6 s
 ```
 
@@ -83,6 +83,17 @@ every later snapshot, so the real cost is 64·ε, and an attacker who averages s
 released data itself.
 
 ![fig4](results/fig4_cap_table.png)
+
+**8. Robustness (E8).** Changing one assumption at a time (trades per day, tail weight, trade size,
+participation; grant rate, grant tails, horizon), with clip bounds set by a fixed public rule:
+
+- holds everywhere: dealer-day ε=1 exposes a dealer's day < 6% of the time; dealer-day protection
+  is 4-7x cheaper with 20 dealers than with 3; the tree beats an even split by 2.2-4.7x; unaccounted
+  per-day noise leaks 22-42% of grants under averaging.
+- does **not** hold everywhere: trade-level ε=1 exposes a dealer's day 41% of the time at 20 trades a
+  day, 69% at 50, but only 15% at 5. A trade-level guarantee covers a dealer-day only as k·ε for
+  k trades (group privacy). With heavy-tailed trades (σ = 1.5) the simple clip rule costs 38% accuracy.
+- trade size alone changes nothing (the setup is scale-invariant), a sanity check.
 
 ## What this suggests for Canton
 

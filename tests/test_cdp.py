@@ -96,3 +96,12 @@ def test_snapshot_attacks_exact():
     assert np.allclose(attacks.snapshot_diff_attack(pub, 100.0), x)
     others = 100 + np.cumsum(np.array([0.0, 5.0, 0.0, 0.0]))
     assert attacks.snapshot_jump_attack(pub, others, 3) == pytest.approx(7.0)
+
+
+def test_sensitivity_runs_and_scale_invariant():
+    from cdp import sensitivity
+    m, c = sensitivity.e8_sensitivity(seeds=5)
+    assert len(m) == len(sensitivity.MARKET_SCENARIOS) and len(c) == len(sensitivity.CAP_SCENARIOS)
+    base = m[m.scenario == "base"].iloc[0]
+    big = m[m.scenario == "large trades (median 1M)"].iloc[0]
+    assert abs(base.trade_err - big.trade_err) < 1e-9  # same seeds, everything scales together
