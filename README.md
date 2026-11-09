@@ -88,7 +88,7 @@ released data itself.
 participation; grant rate, grant tails, horizon), with clip bounds set by a fixed public rule:
 
 - holds everywhere: dealer-day ε=1 exposes a dealer's day < 6% of the time; dealer-day protection
-  is 4-7x cheaper with 20 dealers than with 3; the tree beats an even split by 2.2-4.7x; unaccounted
+  is 6-7x cheaper with 20 dealers than with 3; the tree beats an even split by 2.2-4.7x; unaccounted
   per-day noise leaks 22-42% of grants under averaging.
 - does **not** hold everywhere: trade-level ε=1 exposes a dealer's day 41% of the time at 20 trades a
   day, 69% at 50, but only 15% at 5. A trade-level guarantee covers a dealer-day only as k·ε for
