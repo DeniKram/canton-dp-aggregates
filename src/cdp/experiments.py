@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import attacks, captable, dp, sensitivity
+from . import attacks, captable, dp, registers, sensitivity
 from .data import MarketConfig, generate
 
 TRADE_CLIP = 1_000_000.0       # privacy unit "trade": hide any single trade up to 1M
@@ -261,6 +261,54 @@ def e9_horizon(seeds: int, epsilon: float = 5.0) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# --------------------------------------------------------------- E10 threshold vs DP
+def e10_threshold_vs_dp(seeds: int) -> pd.DataFrame:
+    """One aggregate over R registers (the CADF equity design): exact daily level, min-count-5
+    suppression, and DP increment noise. Utility: median error of the published level, in shares and
+    against shares issued so far. Privacy: grants recovered within ±10% by three attackers."""
+    rules = [
+        ("exact daily level", None),
+        ("threshold min-count-5", None),
+        ("DP eps=5, clip 200k", (200_000.0, 5.0)),
+        ("DP eps=5, clip 1M", (1_000_000.0, 5.0)),
+        ("DP eps=1, clip 1M", (1_000_000.0, 1.0)),
+    ]
+    rows = []
+    for R in (2, 5, 20, 50):
+        cfg = registers.RegistersConfig(registers=R)
+        for name, par in rules:
+            abs_err, rel_err, lag = [], [], []
+            hits = {a: [0, 0] for a in ("outsider", "insider", "coalition")}
+            for s in range(seeds):
+                rng = np.random.default_rng(110_000 + s)
+                g = registers.generate(cfg, rng)
+                if g.size.size == 0:
+                    continue
+                truth = registers.true_level(g, cfg.days)                    # (T,)
+                if name.startswith("exact"):
+                    rel = registers.release_exact(g, cfg.days)
+                elif name.startswith("threshold"):
+                    rel = registers.release_threshold(g, cfg.days, k=5)
+                else:
+                    rel = registers.release_dp(g, cfg.days, par[0], par[1], rng)
+                pub = registers.published_level(rel, cfg.days)               # (T,)
+                err = np.abs(pub - truth)
+                abs_err.append(np.median(err))
+                rel_err.append(np.median(err[truth > 0] / truth[truth > 0]))
+                lag.append(np.mean(~np.isclose(pub, truth, rtol=1e-9, atol=1e-3)) if par is None else np.nan)
+                for a in hits:
+                    h, n = registers.recovered(rel, g, a)
+                    hits[a][0] += h
+                    hits[a][1] += n
+            rows.append({
+                "registers": R, "rule": name,
+                "median_abs_error": np.mean(abs_err), "error_vs_issued": np.mean(rel_err),
+                "days_level_is_stale": np.mean(lag),
+                **{f"recovered_{a}": (h / n if n else float("nan")) for a, (h, n) in hits.items()},
+            })
+    return pd.DataFrame(rows)
+
+
 # --------------------------------------------------------------- plots
 def _plot_eps(df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(1, 2, figsize=(11, 4))
@@ -345,6 +393,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e6_cap_table": e6_cap_table(seeds),
         "e7_clipping": e7_clipping(seeds),
         "e9_horizon": e9_horizon(min(seeds, 100)),
+        "e10_threshold_vs_dp": e10_threshold_vs_dp(seeds),
     }
     res["e8_sensitivity_market"], res["e8_sensitivity_cap_table"] = sensitivity.e8_sensitivity(min(seeds, 100))
     for name, df in res.items():

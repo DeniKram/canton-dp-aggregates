@@ -137,3 +137,43 @@ def test_e3_reports_one_statistic_for_both_windows():
     daily, monthly = df.loc[("dealer_day", "daily")], df.loc[("dealer_day", "monthly")]
     # protecting a dealer's month scales Δ and the total by the same 22x: relative error is unchanged
     assert monthly.median_rel_error == pytest.approx(daily.median_rel_error, rel=0.2)
+
+
+def _toy_grants():
+    from cdp.registers import Grants
+    # day 0: two grants (registers 0, 1); day 1: one grant (register 1); day 3: three grants
+    return Grants(day=np.array([0, 0, 1, 3, 3, 3]), register=np.array([0, 1, 1, 0, 1, 2]),
+                  size=np.array([10.0, 30.0, 50.0, 5.0, 5.0, 90.0]))
+
+
+def test_threshold_release_waits_for_k_grants_and_keeps_the_total():
+    from cdp import registers as rg
+    g = _toy_grants()
+    rel = rg.release_threshold(g, days=5, k=5)
+    assert [r.day for r in rel] == [3] and rel[0].change == pytest.approx(190.0)   # 2+1+3 = 6 grants by day 3
+    pub, truth = rg.published_level(rel, 5), rg.true_level(g, 5)
+    assert list(pub) == [0, 0, 0, 190, 190] and list(truth) == [40, 90, 90, 190, 190]
+
+
+def test_exact_and_threshold_fall_to_the_coalition():
+    from cdp import registers as rg
+    g = _toy_grants()
+    for rel in (rg.release_exact(g, 5), rg.release_threshold(g, 5, k=5)):
+        assert rg.recovered(rel, g, "coalition") == (6, 6)   # total minus everything else is exact
+
+
+def test_outsider_and_insider_on_exact_daily_levels():
+    from cdp import registers as rg
+    g = _toy_grants()
+    rel = rg.release_exact(g, 5)
+    # outsider: day 1 is a lone grant (hit); day 3 change 100 vs largest 90 is outside ±10% (miss)
+    assert rg.recovered(rel, g, "outsider") == (1, 6)
+    # register 0 subtracts its own: day 0 -> 30 (hit), day 1 -> 50 (hit), day 3 -> 95 vs 90 (hit)
+    assert rg.recovered(rel, g, "insider") == (3, 4)
+
+
+def test_dp_release_without_noise_equals_clipped_sums():
+    from cdp import registers as rg
+    g = _toy_grants()
+    rel = rg.release_dp(g, 5, clip=40.0, epsilon=1e12, rng=np.random.default_rng(10))
+    assert len(rel) == 5 and rel[3].change == pytest.approx(5 + 5 + 40, abs=1e-6)

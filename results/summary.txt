@@ -89,6 +89,29 @@ naive-per-day         10.0       640.0            0.0235       268967.7411      
  1024   2.530499e+07         8.899818e+06              0.3517                 1.3074           2.864832e+07          0.1954    4578516.9376                0.1886          4449360.8469
  2048   4.970655e+07         1.690990e+07              0.3402                 1.7547           5.740141e+07          0.2409    8502989.4078                0.2308          8236100.8828
 
+== e10_threshold_vs_dp
+ registers                  rule  median_abs_error  error_vs_issued  days_level_is_stale  recovered_outsider  recovered_insider  recovered_coalition
+         2     exact daily level      0.000000e+00           0.0000               0.0000              0.7488             0.8721               1.0000
+         2 threshold min-count-5      2.231663e+05           0.2227               0.7624              0.0000             0.0635               0.9068
+         2   DP eps=5, clip 200k      5.983060e+05           0.3628                  NaN              0.1372             0.1474               0.1648
+         2     DP eps=5, clip 1M      1.214266e+06           0.9818                  NaN              0.0612             0.0640               0.0691
+         2     DP eps=1, clip 1M      6.028630e+06           4.8879                  NaN              0.0135             0.0113               0.0163
+         5     exact daily level      0.000000e+00           0.0000               0.0000              0.4840             0.5592               1.0000
+         5 threshold min-count-5      2.048930e+05           0.0609               0.7362              0.0000             0.0035               0.9610
+         5   DP eps=5, clip 200k      1.376579e+06           0.3208                  NaN              0.1052             0.1117               0.1678
+         5     DP eps=5, clip 1M      1.216624e+06           0.3340                  NaN              0.0511             0.0526               0.0747
+         5     DP eps=1, clip 1M      5.966418e+06           1.6502                  NaN              0.0157             0.0162               0.0186
+        20     exact daily level      0.000000e+00           0.0000               0.0000              0.0592             0.0684               1.0000
+        20 threshold min-count-5      5.545164e+04           0.0036               0.5198              0.0001             0.0001               0.9919
+        20   DP eps=5, clip 200k      5.140231e+06           0.3109                  NaN              0.0334             0.0358               0.1642
+        20     DP eps=5, clip 1M      1.347285e+06           0.0906                  NaN              0.0180             0.0196               0.0705
+        20     DP eps=1, clip 1M      6.386363e+06           0.4337                  NaN              0.0080             0.0080               0.0156
+        50     exact daily level      0.000000e+00           0.0000               0.0000              0.0008             0.0009               1.0000
+        50 threshold min-count-5      0.000000e+00           0.0000               0.1187              0.0000             0.0000               0.9992
+        50   DP eps=5, clip 200k      1.268257e+07           0.3148                  NaN              0.0076             0.0078               0.1643
+        50     DP eps=5, clip 1M      1.557502e+06           0.0403                  NaN              0.0030             0.0032               0.0692
+        50     DP eps=1, clip 1M      5.676400e+06           0.1520                  NaN              0.0032             0.0033               0.0150
+
 == e8_sensitivity_market
                   scenario  trade_err  trade_leak  dealer_day_err  dealer_day_leak  dealer_day_err_20    C1   C2   C3
                       base     0.0604      0.4118          0.4876           0.0450             0.0752  True True True

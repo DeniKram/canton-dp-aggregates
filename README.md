@@ -12,7 +12,7 @@ enforces the privacy budget on-ledger (Dev Fund RFP *Public verifiability*).
 
 ```bash
 pip install -e ".[dev]"
-pytest                                            # 17 tests
+pytest                                            # 21 tests
 PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~15 s
 ```
 
@@ -103,6 +103,33 @@ error is driven by clipping: about a third of issued shares exceed the bound, th
 and a running total drifts further below the truth the longer the feed runs. For a supply figure this is
 the real limit of the approach, not the choice of mechanism.
 
+**6c. One aggregate over many registers: a threshold against DP (E10).** The Canton Asset Data Feed
+proposal (PR #890) publishes a single daily equity aggregate across all registers and applies a
+suppression rule (`min-count-5`) to daily changes. Modelled here with R registers, 0.15 grants a day
+each, 64 days. "Error" is the median error of the published level against shares issued so far;
+"recovered" is the share of grants an attacker gets within ±10%.
+
+| registers | rule | error | outsider | one register | all-but-one coalition |
+|---|---|---|---|---|---|
+| 5 | exact daily level | 0% | 48% | 56% | 100% |
+| 5 | level moves only when 5 grants are pending | 6.1% | 0% | 0.4% | 100% of released grants |
+| 5 | DP ε = 5, clip 1M | 33% | 5.1% | 5.3% | 7.5% |
+| 20 | exact daily level | 0% | 5.9% | 6.8% | 100% |
+| 20 | level moves only when 5 grants are pending | 0.4% | 0% | 0% | 100% of released grants |
+| 20 | DP ε = 5, clip 1M | 9.1% | 1.8% | 2.0% | 7.1% |
+| 50 | DP ε = 5, clip 1M | 4.0% | 0.3% | 0.3% | 6.9% |
+
+- Suppressing only the *change* item while the level is still published daily protects nothing: the
+  change is the difference of two levels. That is the "exact daily level" row.
+- A threshold that holds the level back until five grants are pending is close to free with 20 registers
+  and stops an outsider and a single register almost completely. It gives no protection against a
+  party that knows the other grants in the batch, the threat model DP is built for.
+- DP is the only rule that bounds the coalition, and for a supply figure it is expensive: clipping at
+  200k loses a third of issued shares at any scale; clipping at 1M needs dozens of registers.
+
+So for this feed a batching threshold is the better first tool, and DP earns its cost where
+contributors are few and each knows its own share of the total, as in the dealer market above.
+
 **7. The clip bound trades bias against noise.** Cap table, tree, ε = 5: bound 50k → 5.4% error,
 100k → 4.5%, 200k → 4.8%, 1M → 19%. Choose it from public or earlier-period data, never from the
 released data itself.
@@ -137,8 +164,9 @@ src/cdp/
   dp.py           clipping, Laplace mechanism, PrivacyAccountant
   attacks.py      coalition, sparse-insider, averaging and snapshot attacks
   captable.py     cap-table model + continual release (binary tree, increment noise)
+  registers.py    one aggregate over many registers: threshold suppression against DP
   sensitivity.py  E8 robustness scenarios
-  experiments.py  E1–E7, E9 → CSV + figures in results/
+  experiments.py  E1–E7, E9, E10 → CSV + figures in results/
 tests/test_cdp.py
 ```
 
