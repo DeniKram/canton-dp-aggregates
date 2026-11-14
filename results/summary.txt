@@ -5,28 +5,28 @@
 single insider, 60% participation     0.4948
 
 == e2_epsilon_sweep
-      unit  epsilon  median_rel_error  victim_recovered
-     trade     0.10            0.3637            0.0659
-     trade     0.25            0.1575            0.1545
-     trade     0.50            0.0923            0.2559
-     trade     1.00            0.0634            0.4202
-     trade     2.00            0.0503            0.5923
-     trade     5.00            0.0441            0.7689
-     trade    10.00            0.0425            0.8200
-dealer_day     0.10            4.2959            0.0093
-dealer_day     0.25            1.7185            0.0150
-dealer_day     0.50            0.8593            0.0264
-dealer_day     1.00            0.4301            0.0570
-dealer_day     2.00            0.2153            0.1080
-dealer_day     5.00            0.0875            0.2395
-dealer_day    10.00            0.0447            0.4177
+      unit  epsilon  median_rel_error  p90_rel_error  victim_recovered
+     trade     0.10            0.3637         1.1158            0.0659
+     trade     0.25            0.1575         0.4531            0.1545
+     trade     0.50            0.0923         0.2438            0.2559
+     trade     1.00            0.0634         0.1554            0.4202
+     trade     2.00            0.0503         0.1221            0.5923
+     trade     5.00            0.0441         0.1095            0.7689
+     trade    10.00            0.0425         0.1078            0.8200
+dealer_day     0.10            4.2959        13.3435            0.0093
+dealer_day     0.25            1.7185         5.3373            0.0150
+dealer_day     0.50            0.8593         2.6687            0.0264
+dealer_day     1.00            0.4301         1.3344            0.0570
+dealer_day     2.00            0.2153         0.6675            0.1080
+dealer_day     5.00            0.0875         0.2676            0.2395
+dealer_day    10.00            0.0447         0.1353            0.4177
 
 == e3_granularity
-      unit release  median_rel_error
-     trade   daily            0.0610
-     trade monthly            0.0088
-dealer_day   daily            0.4156
-dealer_day monthly            0.5290
+      unit release  median_rel_error  mean_rel_error
+     trade   daily            0.0610          0.0762
+     trade monthly            0.0080          0.0088
+dealer_day   daily            0.4156          0.6039
+dealer_day monthly            0.3567          0.5290
 
 == e4_dealers
  dealers  median_rel_error
@@ -47,20 +47,24 @@ dealer_day monthly            0.5290
      100         113539.9990                1.0
 
 == e6_cap_table
-    mechanism  eps_claimed  eps_actual  median_rel_error  recovered_simple  recovered_strong
-        exact          inf         inf            0.0000            1.0000            1.0000
-naive-per-day          1.0        64.0            0.0299            0.0308            0.0840
-naive-per-day          2.0       128.0            0.0260            0.0562            0.1366
-naive-per-day          5.0       320.0            0.0241            0.0979            0.2987
-naive-per-day         10.0       640.0            0.0235            0.1699            0.4680
-  naive-split          1.0         1.0            0.8333            0.0006            0.0030
-  naive-split          2.0         2.0            0.4185            0.0024            0.0067
-  naive-split          5.0         5.0            0.1702            0.0024            0.0163
-  naive-split         10.0        10.0            0.0897            0.0024            0.0236
-         tree          1.0         1.0            0.1934            0.0073            0.0085
-         tree          2.0         2.0            0.1008            0.0133            0.0127
-         tree          5.0         5.0            0.0482            0.0187            0.0212
-         tree         10.0        10.0            0.0331            0.0429            0.0417
+    mechanism  eps_claimed  eps_actual  median_rel_error  median_abs_error  error_vs_issuance  recovered_simple  recovered_strong
+        exact          inf         inf            0.0000            0.0000             0.0000            1.0000            1.0000
+naive-per-day          1.0        64.0            0.0299       335247.8678             0.2155            0.0308            0.0840
+naive-per-day          2.0       128.0            0.0260       293941.2414             0.1889            0.0562            0.1366
+naive-per-day          5.0       320.0            0.0241       275379.0476             0.1770            0.0979            0.2987
+naive-per-day         10.0       640.0            0.0235       268967.7411             0.1729            0.1699            0.4680
+  naive-split          1.0         1.0            0.8333      8990841.0290             5.7787            0.0006            0.0030
+  naive-split          2.0         2.0            0.4185      4517470.6935             2.9035            0.0024            0.0067
+  naive-split          5.0         5.0            0.1702      1840281.4466             1.1828            0.0024            0.0163
+  naive-split         10.0        10.0            0.0897       975670.7977             0.6271            0.0024            0.0236
+         tree          1.0         1.0            0.1934      2095212.3849             1.3467            0.0073            0.0085
+         tree          2.0         2.0            0.1008      1093666.4565             0.7029            0.0133            0.0127
+         tree          5.0         5.0            0.0482       529475.7655             0.3403            0.0187            0.0212
+         tree         10.0        10.0            0.0331       369011.1673             0.2372            0.0429            0.0417
+   increments          1.0         1.0            0.1038      1123823.0642             0.7223            0.0466            0.0115
+   increments          2.0         2.0            0.0555       604602.3811             0.3886            0.0877            0.0187
+   increments          5.0         5.0            0.0312       347134.3420             0.2231            0.1729            0.0441
+   increments         10.0        10.0            0.0258       291983.5791             0.1877            0.2696            0.0635
 
 == e7_clipping
                         case      clip  median_rel_error  clip_bias
@@ -74,6 +78,16 @@ naive-per-day         10.0       640.0            0.0235            0.1699      
 3 dealers, trade unit, eps=1 1000000.0            0.0628     0.0432
 3 dealers, trade unit, eps=1 2000000.0            0.0742     0.0000
 3 dealers, trade unit, eps=1 5000000.0            0.1793     0.0000
+
+== e9_horizon
+ days  issued_shares  clipped_away_shares  clipped_away_share  naive-split_rel_error  naive-split_abs_error  tree_rel_error  tree_abs_error  increments_rel_error  increments_abs_error
+   32   8.517242e+05         3.078937e+05              0.3615                 0.0911           9.559351e+05          0.0411     432987.2297                0.0245           263383.1267
+   64   1.639556e+06         5.464262e+05              0.3333                 0.1726           1.866578e+06          0.0514     569802.8620                0.0362           405844.5170
+  128   3.115626e+06         1.002935e+06              0.3219                 0.3146           3.658660e+06          0.0671     796065.5425                0.0583           717474.9979
+  256   6.146720e+06         2.044617e+06              0.3326                 0.5534           7.261405e+06          0.0881    1199176.9349                0.0826          1152849.8793
+  512   1.265266e+07         4.398529e+06              0.3476                 0.8930           1.428170e+07          0.1330    2220709.5300                0.1280          2179298.5189
+ 1024   2.530499e+07         8.899818e+06              0.3517                 1.3074           2.864832e+07          0.1954    4578516.9376                0.1886          4449360.8469
+ 2048   4.970655e+07         1.690990e+07              0.3402                 1.7547           5.740141e+07          0.2409    8502989.4078                0.2308          8236100.8828
 
 == e8_sensitivity_market
                   scenario  trade_err  trade_leak  dealer_day_err  dealer_day_leak  dealer_day_err_20    C1   C2   C3

@@ -12,8 +12,8 @@ enforces the privacy budget on-ledger (Dev Fund RFP *Public verifiability*).
 
 ```bash
 pip install -e ".[dev]"
-pytest                                            # 13 tests
-PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~6 s
+pytest                                            # 17 tests
+PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~15 s
 ```
 
 ## Setup
@@ -38,11 +38,13 @@ exact volume on **~49%** of days (the days only one other dealer traded).
 
 **2. "ε = 1" means different protection depending on the privacy unit.** At ε = 1, daily releases, 3 dealers:
 
-| unit | error of published total | victim days recovered within ±10% |
-|---|---|---|
-| none (exact) | 0% | 100% |
-| `trade` | **6.3%** | 42% |
-| `dealer_day` | 43% | **5.7%** |
+| unit | median error of published total | 90th-percentile error | victim days recovered within ±10% |
+|---|---|---|---|
+| none (exact) | 0% | 0% | 100% |
+| `trade` | **6.3%** | 16% | 42% |
+| `dealer_day` | 43% | 133% | **5.7%** |
+
+The error is a median over days: one day in ten is worse than the 90th-percentile column.
 
 Plotted as error against leakage, both units trace the **same curve**: a dealer's exposure
 depends only on the noise scale relative to its volume. Trade-level ε = 1 (Δ = 1M) adds the same
@@ -58,7 +60,9 @@ against the true, unclipped totals.
 ![fig2](results/fig2_market_size.png)
 
 **4. Coarser releases help, if the clip bound is retuned.** Same ε = 1, trade level:
-daily total 6.1% error → monthly total **0.9%** with a 2M clip bound (a month accumulates clipping bias).
+daily total 6.1% median error → monthly total **0.8%** with a 2M clip bound (a month accumulates clipping bias).
+Protecting a dealer's whole month does not help: Δ and the total both grow 22x, so the median error stays
+about where it was (36% monthly against 42% daily; the two agree within sampling noise).
 
 **5. Without a budget, noise can be averaged away.** Re-querying the same total 100 times
 cuts the attacker's error from ~960k to ~114k USD (√k law). An accountant with Σε ≤ 5 blocks
@@ -73,10 +77,31 @@ Adding Lap(C/ε) to every snapshot *looks* cheap (2.4% error at "ε = 5") but ea
 every later snapshot, so the real cost is 64·ε, and an attacker who averages snapshots recovers
 30% of grants. With the budget honestly accounted (ε = 5 over 64 days):
 
-| mechanism | error of published total | grants recovered (strong attack) |
-|---|---|---|
-| noise split evenly over days | 17.0% | 1.6% |
-| **binary-tree mechanism** | **4.8%** | 2.1% |
+| mechanism | error vs total | error in shares | error vs shares issued | grants recovered (day-over-day / strong attack) |
+|---|---|---|---|---|
+| noise split evenly over days | 17.0% | 1.84M | 118% | 0.2% / 1.6% |
+| binary-tree mechanism | 4.8% | 529k | 34% | 1.9% / 2.1% |
+| **noise on each day's new shares** | **3.1%** | **347k** | **22%** | 17% / 4.4% |
+
+The simplest honest mechanism wins on a 64-day stream: a grant touches one daily increment, so Lap(C/ε)
+on each increment costs ε in total and the running sum carries √t noises instead of the tree's
+log-many large ones. It is also the least noisy, so the day-over-day attack recovers more grants (17%):
+same ε, a tighter mechanism. The error is quoted three ways because the 10M starting total is public:
+4.8% of the total is a third of everything issued in the period.
+
+**6b. Which mechanism for which stream length (E9, ε = 5).** Median error of the running total, in shares:
+
+| days | even split | tree | increments | shares cut by the 200k clip |
+|---|---|---|---|---|
+| 32 | 956k | 433k | **263k** | 308k |
+| 64 | 1.87M | 570k | **406k** | 546k |
+| 256 | 7.3M | 1.20M | 1.15M | 2.0M |
+| 1024 | 28.6M | 4.6M | 4.4M | 8.9M |
+
+In pure noise the tree overtakes increment noise only somewhere past 1,000 days. Long before that the
+error is driven by clipping: about a third of issued shares exceed the bound, they are never added back,
+and a running total drifts further below the truth the longer the feed runs. For a supply figure this is
+the real limit of the approach, not the choice of mechanism.
 
 **7. The clip bound trades bias against noise.** Cap table, tree, ε = 5: bound 50k → 5.4% error,
 100k → 4.5%, 200k → 4.8%, 1M → 19%. Choose it from public or earlier-period data, never from the
@@ -111,8 +136,9 @@ src/cdp/
   data.py         synthetic market generator; shapes (T, D)
   dp.py           clipping, Laplace mechanism, PrivacyAccountant
   attacks.py      coalition, sparse-insider, averaging and snapshot attacks
-  captable.py     cap-table model + binary-tree continual release
-  experiments.py  E1–E5 → CSV + figures in results/
+  captable.py     cap-table model + continual release (binary tree, increment noise)
+  sensitivity.py  E8 robustness scenarios
+  experiments.py  E1–E7, E9 → CSV + figures in results/
 tests/test_cdp.py
 ```
 

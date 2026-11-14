@@ -105,3 +105,35 @@ def test_sensitivity_runs_and_scale_invariant():
     base = m[m.scenario == "base"].iloc[0]
     big = m[m.scenario == "large trades (median 1M)"].iloc[0]
     assert abs(base.trade_err - big.trade_err) < 1e-9  # same seeds, everything scales together
+
+
+def test_increment_prefix_sums_exact_without_noise():
+    from cdp.captable import increment_prefix_sums
+    x = np.arange(1.0, 38.0)
+    out = increment_prefix_sums(x, sensitivity=1.0, epsilon=1e12, rng=np.random.default_rng(7))
+    assert np.allclose(out, np.cumsum(x), atol=1e-6)
+
+
+def test_increment_noise_grows_like_sqrt_t():
+    from cdp.captable import increment_prefix_sums
+    rng = np.random.default_rng(8)
+    runs = np.array([increment_prefix_sums(np.zeros(64), 1.0, 1.0, rng) for _ in range(4000)])  # (4000, 64)
+    assert runs[:, 0].std() == pytest.approx(np.sqrt(2 * 1), rel=0.1)    # day 1:  √2·b
+    assert runs[:, 63].std() == pytest.approx(np.sqrt(2 * 64), rel=0.1)  # day 64: √(2·64)·b
+
+
+def test_short_stream_increments_beat_tree_long_stream_tree_wins():
+    from cdp.captable import increment_prefix_sums, tree_prefix_sums
+    rng = np.random.default_rng(9)
+    def mean_abs(fn, T, n):
+        return np.mean([np.abs(fn(np.zeros(T), 1.0, 1.0, rng)).mean() for _ in range(n)])
+    assert mean_abs(increment_prefix_sums, 64, 300) < mean_abs(tree_prefix_sums, 64, 60)
+    assert mean_abs(increment_prefix_sums, 4096, 100) > mean_abs(tree_prefix_sums, 4096, 15)
+
+
+def test_e3_reports_one_statistic_for_both_windows():
+    from cdp.experiments import e3_granularity
+    df = e3_granularity(seeds=200).set_index(["unit", "release"])
+    daily, monthly = df.loc[("dealer_day", "daily")], df.loc[("dealer_day", "monthly")]
+    # protecting a dealer's month scales Δ and the total by the same 22x: relative error is unchanged
+    assert monthly.median_rel_error == pytest.approx(daily.median_rel_error, rel=0.2)

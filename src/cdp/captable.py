@@ -9,6 +9,8 @@ Attack: the day-over-day difference of published totals is the size of that day'
 Defences compared, all for the privacy unit "one grant" (clipped at C shares):
   naive-per-day  each daily total + Lap(C/ε)       -> every snapshot spends ε: T days cost T·ε in total
   naive-split    each daily total + Lap(C·T/ε)     -> honest total ε, but noise grows with T
+  increments     each day's NEW shares + Lap(C/ε), then a running sum
+                                                   -> honest total ε, noise grows with √T
   tree           binary-tree continual release     -> honest total ε, noise grows with log T
                  (Dwork, Naor, Pitassi, Rothblum 2010; Chan, Shi, Song 2011)
 """
@@ -77,3 +79,14 @@ def tree_prefix_sums(x: np.ndarray, sensitivity: float, epsilon: float, rng: np.
                 start += size
         out[t] = acc
     return out
+
+
+def increment_prefix_sums(x: np.ndarray, sensitivity: float, epsilon: float, rng: np.random.Generator) -> np.ndarray:
+    """Input perturbation: noise every daily increment once, then take the running sum.
+
+    One grant changes exactly one increment x[t] by at most Δ, so Lap(Δ/ε) per increment makes the
+    whole stream cost ε. The running sum at day t carries t independent noises: std = √(2t)·Δ/ε.
+    Better than the tree for short streams, worse for long ones (√T against log^1.5 T).
+        x shape (T,) -> returns shape (T,)
+    """
+    return np.cumsum(x + rng.laplace(0.0, sensitivity / epsilon, size=x.shape[0]))

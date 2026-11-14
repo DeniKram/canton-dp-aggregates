@@ -51,7 +51,7 @@ def e2_epsilon_sweep(seeds: int, dealers: int = 3) -> pd.DataFrame:
     for unit in ("trade", "dealer_day"):
         clip = _clip_for(unit)
         for eps in EPSILONS:
-            errs, recs = [], []
+            errs, p90s, recs = [], [], []
             for s in range(seeds):
                 rng = np.random.default_rng(10_000 + s)
                 m = generate(replace(MarketConfig(), dealers=dealers), rng)
@@ -59,27 +59,35 @@ def e2_epsilon_sweep(seeds: int, dealers: int = 3) -> pd.DataFrame:
                 clipped = contrib.sum(axis=1)                                      # (T,)
                 pub = clipped + dp.laplace_noise(clip, eps, rng, size=clipped.shape)  # (T,)
                 truth = m.daily_total                                              # (T,) unclipped
-                errs.append(np.median(np.abs(pub - truth) / truth))
+                rel = np.abs(pub - truth) / truth                                  # (T,)
+                errs.append(np.median(rel))
+                p90s.append(np.quantile(rel, 0.9))
                 est = attacks.coalition_attack(pub, contrib, victim=0)             # (T,)
                 recs.append(attacks.recovery_rate(est, m.dealer_day[:, 0]))       # vs TRUE volume
-            rows.append({"unit": unit, "epsilon": eps, "median_rel_error": np.mean(errs), "victim_recovered": np.mean(recs)})
+            rows.append({"unit": unit, "epsilon": eps, "median_rel_error": np.mean(errs),
+                         "p90_rel_error": np.mean(p90s), "victim_recovered": np.mean(recs)})
     return pd.DataFrame(rows)
 
 
 # --------------------------------------------------------------- E3 granularity
 def e3_granularity(seeds: int, epsilon: float = 1.0) -> pd.DataFrame:
     """Same ε, daily vs monthly release. Monthly sums are ~22x larger; for the trade unit the
-    monthly release uses a larger clip bound (2M), since a month accumulates clipping bias."""
+    monthly release uses a larger clip bound (2M), since a month accumulates clipping bias.
+
+    Both rows report a MEDIAN: daily = median over the 22 days (averaged over markets), monthly =
+    median over markets of the one monthly figure. `mean_rel_error` is the mean of the same errors;
+    for Laplace noise the mean is ~1.44x the median, so never compare a mean with a median."""
     rows = []
     for unit in ("trade", "dealer_day"):
         clip = _clip_for(unit)
-        d_err, m_err = [], []
+        d_err, d_mean, m_err = [], [], []
         for s in range(seeds):
             rng = np.random.default_rng(20_000 + s)
             m = generate(MarketConfig(), rng)
             clipped, truth = dp.clipped_daily_total(m, unit, clip), m.daily_total   # (T,), (T,)
             d_pub = clipped + dp.laplace_noise(clip, epsilon, rng, size=clipped.shape)
             d_err.append(np.median(np.abs(d_pub - truth) / truth))
+            d_mean.append(np.mean(np.abs(d_pub - truth) / truth))
             # monthly: one dealer contributes up to T*clip in dealer-month terms; for "trade" Δ stays clip
             if unit == "trade":
                 m_clip = MONTHLY_TRADE_CLIP
@@ -88,8 +96,8 @@ def e3_granularity(seeds: int, epsilon: float = 1.0) -> pd.DataFrame:
                 m_sum, month_sens = clipped.sum(), clip * m.config.days
             m_pub = m_sum + dp.laplace_noise(month_sens, epsilon, rng)
             m_err.append(abs(m_pub - truth.sum()) / truth.sum())
-        rows.append({"unit": unit, "release": "daily", "median_rel_error": np.mean(d_err)})
-        rows.append({"unit": unit, "release": "monthly", "median_rel_error": np.mean(m_err)})
+        rows.append({"unit": unit, "release": "daily", "median_rel_error": np.mean(d_err), "mean_rel_error": np.mean(d_mean)})
+        rows.append({"unit": unit, "release": "monthly", "median_rel_error": np.median(m_err), "mean_rel_error": np.mean(m_err)})
     return pd.DataFrame(rows)
 
 
@@ -146,18 +154,25 @@ def _publish(mode: str, x: np.ndarray, start: float, eps: float, days: int, rng:
         return truth + dp.laplace_noise(GRANT_CLIP * days, eps, rng, size=truth.shape)
     if mode == "tree":            # honest: binary-tree continual release
         return start + captable.tree_prefix_sums(x, GRANT_CLIP, eps, rng)
+    if mode == "increments":      # honest: noise each day's new shares once, then running sum
+        return start + captable.increment_prefix_sums(x, GRANT_CLIP, eps, rng)
     raise ValueError(mode)
 
 
 def e6_cap_table(seeds: int) -> pd.DataFrame:
     """Daily cap-table totals (64 days). Error of the published total vs share of single-grant days
     whose grant size an attacker recovers within ±10%, with a simple (day-over-day) and a strong
-    (knows all other grants, averages) attack."""
+    (knows all other grants, averages) attack.
+
+    Error is reported three ways, because the 10M starting total is public and inflates the base:
+      median_rel_error       |published - true| / true total
+      median_abs_error       the same error in shares
+      error_vs_issuance      that error in shares / all shares issued during the 64 days"""
     cfg = captable.CapTableConfig()
     rows = []
-    for mode in ("exact", "naive-per-day", "naive-split", "tree"):
+    for mode in ("exact", "naive-per-day", "naive-split", "tree", "increments"):
         for eps in ([1.0] if mode == "exact" else [1.0, 2.0, 5.0, 10.0]):
-            errs, simple, strong = [], [], []
+            errs, abs_errs, issued, simple, strong = [], [], [], [], []
             for s in range(seeds):
                 rng = np.random.default_rng(50_000 + s)
                 daily, one = captable.single_grant_days(cfg, rng)
@@ -165,6 +180,8 @@ def e6_cap_table(seeds: int) -> pd.DataFrame:
                 truth = cfg.initial_shares + np.cumsum(daily)                       # (T,) unclipped
                 pub = _publish(mode, x, cfg.initial_shares, eps, cfg.days, rng, raw=daily)  # (T,)
                 errs.append(np.median(np.abs(pub - truth) / truth))
+                abs_errs.append(np.median(np.abs(pub - truth)))
+                issued.append(daily.sum())
                 diff = attacks.snapshot_diff_attack(pub, cfg.initial_shares)
                 contrib = daily if mode == "exact" else x   # what each grant adds to what was published
                 for t in np.where(one & (daily > 0))[0]:
@@ -177,6 +194,8 @@ def e6_cap_table(seeds: int) -> pd.DataFrame:
                 "eps_claimed": float("inf") if mode == "exact" else eps,
                 "eps_actual": float("inf") if mode == "exact" else (eps * cfg.days if mode == "naive-per-day" else eps),
                 "median_rel_error": np.mean(errs),
+                "median_abs_error": np.mean(abs_errs),
+                "error_vs_issuance": np.mean(abs_errs) / np.mean(issued),
                 "recovered_simple": np.mean(simple),
                 "recovered_strong": np.mean(strong),
             })
@@ -210,6 +229,35 @@ def e7_clipping(seeds: int) -> pd.DataFrame:
             errs.append(np.median(np.abs(pub - truth) / truth))
             bias.append(np.median((truth - clipped) / truth))
         rows.append({"case": "3 dealers, trade unit, eps=1", "clip": C, "median_rel_error": np.mean(errs), "clip_bias": np.mean(bias)})
+    return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------- E9 horizon
+def e9_horizon(seeds: int, epsilon: float = 5.0) -> pd.DataFrame:
+    """Which honest mechanism for which stream length? Same total ε, same clip bound, T = 32..2048.
+    Also tracks what clipping does to a running total: the cut shares never come back, so the
+    published total drifts further below the true one the longer the feed runs."""
+    rows = []
+    for T in (32, 64, 128, 256, 512, 1024, 2048):
+        cfg = captable.CapTableConfig(days=T)
+        acc = {k: {"rel": [], "abs": []} for k in ("naive-split", "tree", "increments")}
+        issued, cut = [], []
+        for s in range(seeds):
+            rng = np.random.default_rng(60_000 + s)
+            daily, _ = captable.single_grant_days(cfg, rng)
+            x = np.minimum(daily, GRANT_CLIP)
+            truth = cfg.initial_shares + np.cumsum(daily)
+            issued.append(daily.sum())
+            cut.append(daily.sum() - x.sum())
+            for mode in acc:
+                pub = _publish(mode, x, cfg.initial_shares, epsilon, T, rng)
+                acc[mode]["rel"].append(np.median(np.abs(pub - truth) / truth))
+                acc[mode]["abs"].append(np.median(np.abs(pub - truth)))
+        row = {"days": T, "issued_shares": np.mean(issued), "clipped_away_shares": np.mean(cut),
+               "clipped_away_share": np.sum(cut) / np.sum(issued)}
+        for mode, d in acc.items():
+            row[f"{mode}_rel_error"], row[f"{mode}_abs_error"] = np.mean(d["rel"]), np.mean(d["abs"])
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -259,7 +307,7 @@ def _plot_averaging(df: pd.DataFrame, out: Path) -> None:
 
 def _plot_cap_table(df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(figsize=(6.5, 4))
-    for mode, style in (("naive-split", "o--"), ("tree", "o-")):
+    for mode, style in (("naive-split", "o--"), ("tree", "o-"), ("increments", "s-")):
         g = df[df.mechanism == mode]
         ax.plot(g.eps_claimed, g.median_rel_error * 100, style, label=mode)
     ax.set(xscale="log", yscale="log", xlabel="total privacy budget ε (honestly accounted)",
@@ -268,6 +316,21 @@ def _plot_cap_table(df: pd.DataFrame, out: Path) -> None:
     ax.grid(alpha=0.3, which="both")
     fig.tight_layout()
     fig.savefig(out / "fig4_cap_table.png", dpi=150)
+    plt.close(fig)
+
+
+def _plot_horizon(df: pd.DataFrame, out: Path) -> None:
+    fig, ax = plt.subplots(figsize=(6.5, 4))
+    for mode, style in (("naive-split", "o--"), ("tree", "o-"), ("increments", "s-")):
+        ax.plot(df.days, df[f"{mode}_abs_error"] / 1e3, style, label=mode)
+    ax.plot(df.days, df.clipped_away_shares / 1e3, "k:", label="shares cut by clipping (bias)")
+    ax.set(xscale="log", yscale="log", xlabel="days in the stream", ylabel="thousand shares",
+           title="Cap table, ε = 5: median error of the running total")
+    ax.set_xticks(df.days, [str(d) for d in df.days])
+    ax.legend()
+    ax.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+    fig.savefig(out / "fig5_horizon.png", dpi=150)
     plt.close(fig)
 
 
@@ -281,6 +344,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e5_averaging": e5_averaging(seeds),
         "e6_cap_table": e6_cap_table(seeds),
         "e7_clipping": e7_clipping(seeds),
+        "e9_horizon": e9_horizon(min(seeds, 100)),
     }
     res["e8_sensitivity_market"], res["e8_sensitivity_cap_table"] = sensitivity.e8_sensitivity(min(seeds, 100))
     for name, df in res.items():
@@ -289,6 +353,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
     _plot_dealers(res["e4_dealers"], out)
     _plot_averaging(res["e5_averaging"], out)
     _plot_cap_table(res["e6_cap_table"], out)
+    _plot_horizon(res["e9_horizon"], out)
     return res
 
 
@@ -297,7 +362,7 @@ def main() -> None:
     ap.add_argument("--out", default="results")
     ap.add_argument("--seeds", type=int, default=200)
     args = ap.parse_args()
-    pd.set_option("display.width", 120)
+    pd.set_option("display.width", 200)
     for name, df in run_all(Path(args.out), args.seeds).items():
         print(f"\n== {name}\n{df.round(4).to_string(index=False)}")
 
