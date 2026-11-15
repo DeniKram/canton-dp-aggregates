@@ -1,5 +1,7 @@
 # canton-dp-aggregates
 
+**Article:** [Private Markets, Public Numbers: Thresholds and Differential Privacy for Aggregates on Canton](article/article.md) (draft). Every number in it comes from the experiments below.
+
 **Can a private market on Canton publish aggregate statistics without leaking its participants' positions?**
 
 Canton keeps transactions private, but markets need public signals: volume, supply, prices.
