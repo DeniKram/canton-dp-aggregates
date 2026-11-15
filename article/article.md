@@ -219,7 +219,7 @@ Next: share these results with the CADF and ZWING teams, and build a Daml refere
 
 ## Disclosure
 
-[To complete before publishing: any Canton Coin holdings; the plan to submit an open-source proposal under the *Public verifiability* RFP; how AI tools were used in the analysis and drafting; no sponsorship from the teams discussed.]
+I hold no Canton Coin. I am submitting this article to the Canton Community Research Grants, and I am considering a separate open-source proposal to the Canton Development Fund. I have had no contact and have no commercial relationship with Fairmint, Blockworks or ZWING, and none of them sponsored or reviewed this work. The analysis, code and draft were prepared with the help of an AI assistant; I checked the results and am responsible for the conclusions.
 
 ## Appendix: reproducibility and sources
 
