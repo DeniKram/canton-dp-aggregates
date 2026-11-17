@@ -161,6 +161,20 @@ Three readings:
 
 So the two tools divide the ground. A threshold fits an aggregate with many independent contributors read by outsiders, which is the CADF equity design. Noise fits a total whose contributors are few and each knows its own share, which is the dealer market of section 2 and any volume metric on a thin asset.
 
+### Several metrics: count changes per metric
+
+A threshold has a second trap when one feed publishes several metrics. If a single counter collects every kind of change and its k-th change releases all metrics at once, a metric touched by only one of those changes still shows that change exactly: four conversions and one issuance reach k = 5, and the published change in shares issued is that one issuance. Modelled on one company over a year (issuance 0.15 a day, secondary transfers 0.20, conversions 0.05, preferred rounds 0.01):
+
+| k | One shared counter | Preferred shares alone | One counter per metric | Median delay, shared → per metric |
+| --- | --- | --- | --- | --- |
+| 3 | 56% | 85% | 0% | 1 → 3 days |
+| 5 | 32% | 72% | 0% | 4 → 9 days |
+| 10 | 12% | 45% | 0% | 10 → 23 days |
+
+*canton-dp-aggregates, experiment E11 · 200 runs per row. Share of metric releases whose change comes from a single event.*
+
+With a shared counter and k = 5, 98% of metric releases mix fewer than five changes of that metric, so the threshold almost never holds where it matters. A counter per metric, and per share class, removes this by construction. The price is delay, and it falls on rare metrics: preferred stock changes about 0.06 times a day here, so at k = 5 it would move roughly every 80 days. Two leaks remain outside this model: differences across metrics (the change in common shares outstanding minus the change in shares issued isolates conversions) and the timing of releases itself.
+
 ### Do the conclusions depend on the assumptions?
 
 Each scenario changes one assumption of the base case, with clip bounds set by a fixed public rule (4× the median trade, 2× the expected dealer-day, 2× the median grant) rather than tuned to the data; 100 runs per scenario.
@@ -199,7 +213,7 @@ A threshold rule fits the same contracts with no noise at all: the release choic
 Match the rule to who contributes and who reads.
 
 1. **Protect the level, not only the change.** A suppression rule on a daily change item does nothing if the level is published every day.
-2. **Many independent contributors, outside readers: use a threshold on the level.** With 20 registers, releasing when five changes are pending costs under 1% and leaves an outsider nothing.
+2. **Many independent contributors, outside readers: use a threshold on the level.** With 20 registers, releasing when five changes are pending costs under 1% and leaves an outsider nothing. Count the pending changes per metric and per share class, not in total.
 3. **Few contributors who each know their share: use DP.** A threshold cannot help when the reader is a contributor. For daily volumes, trade-level ε ≈ 1 costs about 6% median error on a three-dealer market; state the privacy unit next to the number, and remember it protects a busy dealer's day only weakly.
 4. **Dealer-level DP: markets with ≥ 20 participants.** Below that, noise swamps a daily figure, and a longer window does not help.
 5. **Avoid noise on figures that must be exact.** For supply, clipping bias accumulates; prefer thresholds, delay, or access control.
@@ -210,7 +224,7 @@ Match the rule to who contributes and who reads.
 The results are directional: they come from synthetic data, not from Canton.
 
 - **Synthetic data.** Trade counts, grant rates and sizes are assumptions. The robustness check shows which conclusions survive seven alternative markets. Calibrating against real orders of magnitude (number of registers, grant frequency, dealers per asset) is the most valuable next step.
-- **One threshold rule.** Only "five pending changes" was modelled. A count threshold does not guard against one dominant contribution, and other metrics (a valuation sum that moves on a single priced round) need their own analysis.
+- **Simple threshold rules.** Only "k pending changes" was modelled, counted in total or per metric. A count threshold does not guard against one dominant contribution, and other metrics (a valuation sum that moves on a single priced round) need their own analysis.
 - **Basic composition only.** Advanced composition or Rényi DP would stretch the same budget over more releases.
 - **Attacks are lower bounds.** The recovery rates are for the attacks tried here; the ε guarantee is what holds against all of them.
 - **Honest aggregator assumed.** Neither rule proves the computation was correct.
@@ -232,7 +246,7 @@ PYTHONPATH=src python -m cdp.experiments --out results --seeds 200
 python article/make_figures.py        # redraws the figures of this article
 ```
 
-Modules: `data.py` (market generator), `dp.py` (clipping, Laplace mechanism, budget accountant), `attacks.py` (coalition, sparse-insider, averaging and snapshot attacks), `captable.py` (cap-table model, binary-tree and increment-noise continual release), `registers.py` (one aggregate over many registers, threshold and DP release rules), `sensitivity.py` (robustness scenarios), `experiments.py` (E1–E10, CSV and figures). Licence Apache-2.0.
+Modules: `data.py` (market generator), `dp.py` (clipping, Laplace mechanism, budget accountant), `attacks.py` (coalition, sparse-insider, averaging and snapshot attacks), `captable.py` (cap-table model, binary-tree and increment-noise continual release), `registers.py` (one aggregate over many registers, threshold and DP release rules), `threshold.py` (threshold release on several metrics), `sensitivity.py` (robustness scenarios), `experiments.py` (E1–E11, CSV and figures). Licence Apache-2.0.
 
 Sources:
 

@@ -177,3 +177,33 @@ def test_dp_release_without_noise_equals_clipped_sums():
     g = _toy_grants()
     rel = rg.release_dp(g, 5, clip=40.0, epsilon=1e12, rng=np.random.default_rng(10))
     assert len(rel) == 5 and rel[3].change == pytest.approx(5 + 5 + 40, abs=1e-6)
+
+
+# ---------------------------------------------------------------- E11 threshold counters
+from cdp import threshold  # noqa: E402
+
+
+def _events(rows, days=None):
+    t = np.array(rows, dtype=bool)
+    d = np.arange(len(rows)) if days is None else np.array(days)
+    return threshold.Events(d, t)
+
+
+def test_shared_counter_exposes_lone_change():
+    # metrics: shares_issued, outstanding_common, outstanding_preferred, holders_count
+    conversion = [False, True, True, False]
+    issuance = [True, True, False, False]
+    ev = _events([conversion] * 4 + [issuance])  # k=5 reached; shares_issued saw only 1 change
+    r = threshold.release_shared(ev, k=5)
+    assert r.releases == 3                        # issued, common, preferred changed
+    assert r.exposed_single == 1                  # shares_issued delta = that one issuance
+    assert r.below_k == 2                         # issued (1) and preferred (4) both < 5
+
+
+def test_per_metric_counter_never_exposes_below_k():
+    rng = np.random.default_rng(1)
+    ev = threshold.generate_events(threshold.ThresholdConfig(days=200), rng)
+    r = threshold.release_per_metric(ev, k=4)
+    assert r.exposed_single == 0 and r.below_k == 0
+    assert r.lag_days.min() >= 0
+    assert len(r.lag_days) + r.unpublished == r.total_changes

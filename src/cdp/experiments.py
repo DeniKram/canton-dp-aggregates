@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import attacks, captable, dp, registers, sensitivity
+from . import attacks, captable, dp, registers, sensitivity, threshold
 from .data import MarketConfig, generate
 
 TRADE_CLIP = 1_000_000.0       # privacy unit "trade": hide any single trade up to 1M
@@ -309,6 +309,45 @@ def e10_threshold_vs_dp(seeds: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# --------------------------------------------------------------- E11 threshold release counters
+THRESHOLD_KS = [2, 3, 5, 10]
+
+
+def e11_threshold_counters(seeds: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Shared vs per-metric k counter for threshold release on several metrics.
+
+    Returns (summary per rule and k, shared-counter exposure per metric and k).
+    """
+    cfg = threshold.ThresholdConfig()
+    rows, per_metric = [], []
+    for k in THRESHOLD_KS:
+        acc = {r: dict(rel=0, single=0, below=0, unpub=0, total=0, lags=[]) for r in ("shared", "per-metric")}
+        pm = []
+        for s in range(seeds):
+            ev = threshold.generate_events(cfg, np.random.default_rng(110_000 + s))
+            for rule, fn in (("shared", threshold.release_shared), ("per-metric", threshold.release_per_metric)):
+                r = fn(ev, k)
+                a = acc[rule]
+                a["rel"] += r.releases
+                a["single"] += r.exposed_single
+                a["below"] += r.below_k
+                a["unpub"] += r.unpublished
+                a["total"] += r.total_changes
+                a["lags"].append(r.lag_days)
+            pm.append(threshold.per_metric_exposure(ev, k))
+        for rule, a in acc.items():
+            lags = np.concatenate(a["lags"])
+            rows.append(dict(rule=rule, k=k,
+                             share_exposed_single=a["single"] / a["rel"],
+                             share_below_k=a["below"] / a["rel"],
+                             median_lag_days=float(np.median(lags)),
+                             p90_lag_days=float(np.percentile(lags, 90)),
+                             share_held_at_end=a["unpub"] / a["total"]))
+        mean = np.nanmean(np.array(pm), axis=0)
+        per_metric += [dict(k=k, metric=m, share_exposed_single=v) for m, v in zip(threshold.METRICS, mean)]
+    return pd.DataFrame(rows), pd.DataFrame(per_metric)
+
+
 # --------------------------------------------------------------- plots
 def _plot_eps(df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(1, 2, figsize=(11, 4))
@@ -382,6 +421,28 @@ def _plot_horizon(df: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def _plot_threshold(df: pd.DataFrame, per_metric: pd.DataFrame, out: Path) -> None:
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4))
+    for m in threshold.METRICS:
+        g = per_metric[per_metric.metric == m]
+        a1.plot(g.k, g.share_exposed_single * 100, "o-", label=m)
+    a1.set(xlabel="threshold k", ylabel="releases exposing a single change, %",
+           title="Shared counter: exposure per metric", xticks=THRESHOLD_KS)
+    a1.legend(fontsize=8)
+    a1.grid(alpha=0.3)
+    for rule, color in (("shared", "C0"), ("per-metric", "C3")):
+        g = df[df.rule == rule]
+        a2.plot(g.k, g.median_lag_days, "o-", color=color, label=f"{rule}, median")
+        a2.plot(g.k, g.p90_lag_days, "o--", color=color, alpha=0.5, label=f"{rule}, 90th pct")
+    a2.set(xlabel="threshold k", ylabel="days from change to publication",
+           title="Cost: publication delay", xticks=THRESHOLD_KS)
+    a2.legend(fontsize=8)
+    a2.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "fig6_threshold_counters.png", dpi=150)
+    plt.close(fig)
+
+
 def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
     out.mkdir(parents=True, exist_ok=True)
     res = {
@@ -395,6 +456,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e9_horizon": e9_horizon(min(seeds, 100)),
         "e10_threshold_vs_dp": e10_threshold_vs_dp(seeds),
     }
+    res["e11_threshold_counters"], res["e11_threshold_per_metric"] = e11_threshold_counters(seeds)
     res["e8_sensitivity_market"], res["e8_sensitivity_cap_table"] = sensitivity.e8_sensitivity(min(seeds, 100))
     for name, df in res.items():
         df.to_csv(out / f"{name}.csv", index=False)
@@ -403,6 +465,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
     _plot_averaging(res["e5_averaging"], out)
     _plot_cap_table(res["e6_cap_table"], out)
     _plot_horizon(res["e9_horizon"], out)
+    _plot_threshold(res["e11_threshold_counters"], res["e11_threshold_per_metric"], out)
     return res
 
 

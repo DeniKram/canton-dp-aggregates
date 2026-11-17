@@ -14,7 +14,7 @@ enforces the privacy budget on-ledger (Dev Fund RFP *Public verifiability*).
 
 ```bash
 pip install -e ".[dev]"
-pytest                                            # 21 tests
+pytest                                            # 23 tests
 PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~15 s
 ```
 
@@ -132,6 +132,27 @@ each, 64 days. "Error" is the median error of the published level against shares
 So for this feed a batching threshold is the better first tool, and DP earns its cost where
 contributors are few and each knows its own share of the total, as in the dealer market above.
 
+**6d. Threshold release on several metrics: count per metric (E11).** A rule "publish once k changes
+are pending" protects a metric only if the k changes are counted *for that metric*. With one counter
+shared by all change types, a release triggered by 4 conversions + 1 issuance publishes a
+`shares_issued` delta that is exactly that one issuance. One synthetic company over a year (issuance
+0.15/day, secondary transfers 0.20, conversions 0.05, preferred rounds 0.01; a change moves
+`holders_count` half the time), 200 runs, share of metric releases that expose a single change:
+
+| k | shared counter | `outstanding_preferred` alone | per-metric counter | median delay, shared → per-metric |
+|---|---|---|---|---|
+| 3 | 56% | 85% | 0% | 1 → 3 days |
+| 5 | 32% | 72% | 0% | 4 → 9 days |
+| 10 | 12% | 45% | 0% | 10 → 23 days |
+
+At k = 5 with a shared counter, 98% of metric releases mix fewer than k changes. Per-metric (and
+per-class) counters remove the exposure by construction; the cost is delay, largest for rare
+metrics: preferred stock changes ~0.06 times a day, so at k = 5 it moves roughly every 80 days.
+Not covered: differences across metrics (Δ`outstanding_common` − Δ`shares_issued` isolates
+conversions) and the release timing itself.
+
+![fig6](results/fig6_threshold_counters.png)
+
 **7. The clip bound trades bias against noise.** Cap table, tree, ε = 5: bound 50k → 5.4% error,
 100k → 4.5%, 200k → 4.8%, 1M → 19%. Choose it from public or earlier-period data, never from the
 released data itself.
@@ -167,8 +188,9 @@ src/cdp/
   attacks.py      coalition, sparse-insider, averaging and snapshot attacks
   captable.py     cap-table model + continual release (binary tree, increment noise)
   registers.py    one aggregate over many registers: threshold suppression against DP
+  threshold.py    threshold release on several metrics: shared vs per-metric counters
   sensitivity.py  E8 robustness scenarios
-  experiments.py  E1–E7, E9, E10 → CSV + figures in results/
+  experiments.py  E1–E7, E9–E11 → CSV + figures in results/
 tests/test_cdp.py
 ```
 
