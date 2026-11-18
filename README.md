@@ -14,7 +14,7 @@ enforces the privacy budget on-ledger (Dev Fund RFP *Public verifiability*).
 
 ```bash
 pip install -e ".[dev]"
-pytest                                            # 23 tests
+pytest                                            # 25 tests
 PYTHONPATH=src python -m cdp.experiments --out results --seeds 200   # ~15 s
 ```
 
@@ -153,6 +153,34 @@ conversions) and the release timing itself.
 
 ![fig6](results/fig6_threshold_counters.png)
 
+**6e. Breakdowns by segment: DP per cell (E12).** Can a publisher with many cap tables release a
+typical valuation per segment (sector x stage) instead of one aggregate? Privacy unit = one company;
+cells are disjoint, so each gets the full ε (split between a noisy count and a noisy sum of clipped
+log-valuations, range 1M-1B USD). Valuations log-normal, median 20M; 200 runs.
+
+| companies in cell | ε = 0.5 | ε = 1 | ε = 2 | exact, published when ≥ 5 |
+|---|---|---|---|---|
+| 5 | 100% | 91% | 52% | 0% error, coalition recovers 100% |
+| 20 | 57% | 30% | 15% | 0% error, coalition recovers 100% |
+| 50 | 18% | 8.8% | 4.4% | 0% error, coalition recovers 100% |
+| 100 | 9.8% | 4.8% | 2.4% | 0% error, coalition recovers 100% |
+
+(median error of the typical valuation; under DP a coalition that knows every other company in the
+cell recovers the target within ±10% in under 5% of runs at any size.) Share of cells within 10% at
+ε = 1, companies spread unevenly over the cells:
+
+| companies | 5 cells | 20 cells |
+|---|---|---|
+| 100 | 21% | 7% |
+| 300 | 47% | 18% |
+| 1,000 | 77% | 41% |
+
+DP breakdowns are useful from about 50 companies per cell: coarse segments for a publisher with
+hundreds of companies, fine ones only at thousands. A count threshold publishes almost every cell
+exactly, and gives a coalition the target's valuation exactly.
+
+![fig7](results/fig7_segments.png)
+
 **7. The clip bound trades bias against noise.** Cap table, tree, ε = 5: bound 50k → 5.4% error,
 100k → 4.5%, 200k → 4.8%, 1M → 19%. Choose it from public or earlier-period data, never from the
 released data itself.
@@ -189,8 +217,9 @@ src/cdp/
   captable.py     cap-table model + continual release (binary tree, increment noise)
   registers.py    one aggregate over many registers: threshold suppression against DP
   threshold.py    threshold release on several metrics: shared vs per-metric counters
+  segments.py     per-segment statistics: DP per cell against a count threshold
   sensitivity.py  E8 robustness scenarios
-  experiments.py  E1–E7, E9–E11 → CSV + figures in results/
+  experiments.py  E1–E7, E9–E12 → CSV + figures in results/
 tests/test_cdp.py
 ```
 

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import attacks, captable, dp, registers, sensitivity, threshold
+from . import attacks, captable, dp, registers, segments, sensitivity, threshold
 from .data import MarketConfig, generate
 
 TRADE_CLIP = 1_000_000.0       # privacy unit "trade": hide any single trade up to 1M
@@ -348,6 +348,56 @@ def e11_threshold_counters(seeds: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(rows), pd.DataFrame(per_metric)
 
 
+# --------------------------------------------------------------- E12 segment-level statistics
+SEGMENT_SIZES = [3, 5, 10, 20, 50, 100]
+SEGMENT_EPS = [0.5, 1.0, 2.0]
+SEGMENT_K = 5
+
+
+def e12_segments(seeds: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Per-cell typical valuation under DP vs a count threshold, and how many cells are usable.
+
+    Returns (by cell size and rule, coverage of a 20-cell breakdown by number of companies).
+    """
+    cfg = segments.ValuationConfig()
+    rows = []
+    for n in SEGMENT_SIZES:
+        for eps in SEGMENT_EPS:
+            err, rec = [], []
+            for s in range(seeds):
+                rng = np.random.default_rng(120_000 + s)
+                v = segments.sample_valuations(cfg, n, rng)
+                r = segments.dp_release(cfg, v, eps, rng)
+                err.append(abs(r.typical / segments.geometric_mean(v) - 1))
+                est = segments.coalition_estimate(cfg, r.log_sum, v[1:])
+                rec.append(abs(est / v[0] - 1) <= 0.10)
+            rows.append(dict(cell_size=n, rule=f"DP eps={eps:g}", median_error=float(np.median(err)),
+                             p90_error=float(np.percentile(err, 90)), published=1.0,
+                             coalition_recovers=float(np.mean(rec))))
+        pub = float(n >= SEGMENT_K)
+        rows.append(dict(cell_size=n, rule=f"exact, k>={SEGMENT_K}", median_error=0.0 if pub else np.nan,
+                         p90_error=0.0 if pub else np.nan, published=pub, coalition_recovers=pub))
+    by_size = pd.DataFrame(rows)
+
+    cov = []
+    for n_cells in [5, 20]:
+        for n_comp in [100, 300, 1000]:
+            ok10, ok25, thr = [], [], []
+            for s in range(seeds):
+                rng = np.random.default_rng(121_000 + s)
+                sizes = segments.cell_sizes(n_comp, n_cells, 1.0, rng)
+                for n in sizes[sizes > 0]:
+                    v = segments.sample_valuations(cfg, int(n), rng)
+                    e = abs(segments.dp_release(cfg, v, 1.0, rng).typical / segments.geometric_mean(v) - 1)
+                    ok10.append(e <= 0.10)
+                    ok25.append(e <= 0.25)
+                    thr.append(n >= SEGMENT_K)
+            cov.append(dict(companies=n_comp, cells=n_cells, dp_eps1_within_10pct=float(np.mean(ok10)),
+                            dp_eps1_within_25pct=float(np.mean(ok25)),
+                            threshold_k5_published=float(np.mean(thr))))
+    return by_size, pd.DataFrame(cov)
+
+
 # --------------------------------------------------------------- plots
 def _plot_eps(df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(1, 2, figsize=(11, 4))
@@ -443,6 +493,29 @@ def _plot_threshold(df: pd.DataFrame, per_metric: pd.DataFrame, out: Path) -> No
     plt.close(fig)
 
 
+def _plot_segments(df: pd.DataFrame, out: Path) -> None:
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4))
+    for i, eps in enumerate(SEGMENT_EPS):
+        g = df[df.rule == f"DP eps={eps:g}"]
+        a1.plot(g.cell_size, g.median_error * 100, "o-", color=f"C{i}", label=f"DP, ε = {eps:g}")
+        a2.plot(g.cell_size, g.coalition_recovers * 100, "o-", color=f"C{i}", label=f"DP, ε = {eps:g}")
+    t = df[df.rule == f"exact, k>={SEGMENT_K}"]
+    a2.step(t.cell_size, t.coalition_recovers * 100, where="post", color="0.3", ls="--",
+            label=f"exact, published when ≥ {SEGMENT_K}")
+    a1.axhline(10, color="0.6", lw=0.8, ls=":")
+    a1.set(xscale="log", xlabel="companies in the cell", ylabel="median error of typical valuation, %",
+           title="Accuracy per cell", xticks=SEGMENT_SIZES, xticklabels=SEGMENT_SIZES, ylim=(0, None))
+    a2.set(xscale="log", xlabel="companies in the cell", ylabel="valuations recovered within ±10%, %",
+           title="Coalition knowing all other companies", xticks=SEGMENT_SIZES, xticklabels=SEGMENT_SIZES,
+           ylim=(-3, 103))
+    for a in (a1, a2):
+        a.legend(fontsize=8)
+        a.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "fig7_segments.png", dpi=150)
+    plt.close(fig)
+
+
 def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
     out.mkdir(parents=True, exist_ok=True)
     res = {
@@ -457,6 +530,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
         "e10_threshold_vs_dp": e10_threshold_vs_dp(seeds),
     }
     res["e11_threshold_counters"], res["e11_threshold_per_metric"] = e11_threshold_counters(seeds)
+    res["e12_segments"], res["e12_segment_coverage"] = e12_segments(seeds)
     res["e8_sensitivity_market"], res["e8_sensitivity_cap_table"] = sensitivity.e8_sensitivity(min(seeds, 100))
     for name, df in res.items():
         df.to_csv(out / f"{name}.csv", index=False)
@@ -466,6 +540,7 @@ def run_all(out: Path, seeds: int) -> dict[str, pd.DataFrame]:
     _plot_cap_table(res["e6_cap_table"], out)
     _plot_horizon(res["e9_horizon"], out)
     _plot_threshold(res["e11_threshold_counters"], res["e11_threshold_per_metric"], out)
+    _plot_segments(res["e12_segments"], out)
     return res
 
 

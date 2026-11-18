@@ -207,3 +207,27 @@ def test_per_metric_counter_never_exposes_below_k():
     assert r.exposed_single == 0 and r.below_k == 0
     assert r.lag_days.min() >= 0
     assert len(r.lag_days) + r.unpublished == r.total_changes
+
+
+# ---------------------------------------------------------------- E12 segment statistics
+from cdp import segments  # noqa: E402
+
+
+def test_coalition_recovers_target_exactly_without_noise():
+    cfg = segments.ValuationConfig()
+    v = np.array([5e6, 30e6, 80e6])
+    exact_log_sum = segments.clipped_logs(cfg, v).sum()
+    est = segments.coalition_estimate(cfg, exact_log_sum, v[1:])
+    assert abs(est / v[0] - 1) < 1e-9
+
+
+def test_dp_error_shrinks_with_cell_size():
+    cfg = segments.ValuationConfig()
+    def med_err(n):
+        errs = []
+        for s in range(300):
+            rng = np.random.default_rng(s)
+            v = segments.sample_valuations(cfg, n, rng)
+            errs.append(abs(segments.dp_release(cfg, v, 1.0, rng).typical / segments.geometric_mean(v) - 1))
+        return np.median(errs)
+    assert med_err(100) < med_err(10) / 3
