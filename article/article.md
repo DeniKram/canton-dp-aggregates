@@ -4,7 +4,11 @@ Draft, Nov 14, 2026 · Denis
 
 ## TL;DR
 
-On a thin private market, publishing "only totals" is not private: two of three dealers who compare notes recover the third dealer's daily volume on every day. Two tools fix this, and they fit different cases. Where contributors are few and each knows its own share of the total, as with dealer volumes, only differential privacy bounds the leak, and "ε = 1" means very different protection depending on what it protects: hiding single trades costs a median error of 6.3% yet still exposes the day of a dealer making ~20 trades 42% of the time, while hiding whole dealer-days cuts exposure to 5.7% at a median error of 43% with three dealers (6.3% with twenty). Where contributors are many and the reader is an outsider, as with a share count summed over many cap tables, a threshold does better: moving the published total only when five changes are pending costs 0.4% with 20 registers and leaves an outsider nothing, while DP at ε = 5 costs 9%. In both cases the rule must cover the level and not only the change, and a noise budget must be enforced, which on Canton belongs in a Daml contract.
+On a thin private market, publishing "only totals" is not private: two of three dealers who compare notes recover the third dealer's daily volume on every day. Two tools fix this, and they fit different cases:
+
+- **Few contributors who know their own share** (dealer volumes): only differential privacy bounds the leak, and the privacy unit decides what "ε = 1" means. Hiding single trades costs 6.3% error yet still exposes a busy dealer's day 42% of the time; hiding whole dealer-days cuts exposure to 5.7%, at 43% error with three dealers and 6.3% with twenty.
+- **Many contributors, outside readers** (a share count summed over many cap tables): a threshold does better. Moving the total only when five changes are pending costs 0.4% with 20 registers and leaves an outsider nothing; DP at ε = 5 costs 9%.
+- **Either way:** the rule must cover the level, not only the change; with several metrics it must count changes per metric; and a noise budget must be enforced, which on Canton belongs in a Daml contract.
 
 ## 1. The problem: totals leak on thin markets
 
@@ -25,8 +29,10 @@ Two current proposals under the same RFP publish Canton aggregates. One has an i
 
 | Proposal | What it publishes | How it is checked | Inference protection |
 | --- | --- | --- | --- |
-| [Canton Asset Data Feed](https://github.com/canton-foundation/canton-dev-fund/pull/890) (Fairmint with Blockworks; 2.4M CC requested) | first feed: private-company equity as one daily aggregate across every register Fairmint operates (shares outstanding, shares issued, holders, valuation); public, no account needed | each daily snapshot is anchored on Canton as a Merkle root; the proposal says the anchor does not show the values are correct | yes: no company-level item, a suppression rule on daily changes (`min-count-5` in the example), no holder ids or single positions, and a "privacy floor" acceptance condition |
+| [Canton Asset Data Feed](https://github.com/canton-foundation/canton-dev-fund/pull/890) (Fairmint with Blockworks; 2.4M CC, approved by committee vote on Nov 13, 2026) | first feed: private-company equity as one daily aggregate across every register Fairmint operates (shares outstanding, shares issued, holders, valuation); public, no account needed | each daily snapshot is anchored on Canton as a Merkle root; the proposal says the anchor does not show the values are correct | yes: no company-level item, a suppression rule on daily changes (`min-count-5` in the example), no holder ids or single positions, and a "privacy floor" acceptance condition |
 | [Attested metrics feed](https://forum.canton.network/t/attested-metrics-feed-for-canton-assets-rfp-11-public-verifiability-seeking-feedback-champion/9093) (ZWING) | supply, issuance, volume of issuer assets | proof computed on the issuer's own node, commitment on the Global Synchronizer | none in the forum post |
+
+*Both described as written on Nov 14, 2026. The CADF release rule is being revised in public review; section 4 measures both a rule on daily changes and a rule on the published level.*
 
 So the question is no longer whether aggregates need protection, but which rule protects what. A threshold such as `min-count-5` and calibrated noise are different tools. This article measures both: noise on a market with few contributors (sections 2–4), and a threshold against noise on the design the CADF proposal describes (section 4, last part).
 
@@ -94,7 +100,7 @@ Trade-level ε = 1 adds the same noise as dealer-level ε = 12, so for a dealer'
 
 Dealer-level noise is fixed by one dealer's size, so it shrinks relative to the total as dealers are added.
 
-**Release window.** Trade-level protection at ε = 1 drops from 6.1% error daily to 0.8% monthly, but only if the monthly release uses a larger clip bound (2M instead of 1M): the noise stays fixed while the total grows ~22 times, whereas clipping bias grows with it. Protecting a dealer's whole month gains nothing from the longer window: the protected unit and the total both grow 22 times, and the error stays where it was (36% monthly, 42% daily, equal within sampling noise).
+**Release window.** Trade-level protection at ε = 1 drops from 6.1% error daily (a separate run, E3) to 0.8% monthly, but only if the monthly release uses a larger clip bound (2M instead of 1M): the noise stays fixed while the total grows ~22 times, whereas clipping bias grows with it. Protecting a dealer's whole month gains nothing from the longer window: the protected unit and the total both grow 22 times, and the error stays where it was (36% monthly, 42% daily, equal within sampling noise).
 
 **Averaging attack.** If the same daily total can be re-queried with fresh noise, the attacker's error falls from 960k USD after one query to 486k after 5 and 114k after 100, the √k law. A budget of Σε ≤ 5 refuses the sixth query.
 
