@@ -1,6 +1,8 @@
 # Private Markets, Public Numbers: Thresholds and Differential Privacy for Aggregates on Canton
 
-Draft, Nov 14, 2026 · Denis
+Nov 23, 2026 · Denis Kramskyi
+
+*Research article for the Canton Community Research Grants (November 2026).*
 
 ## TL;DR
 
@@ -12,7 +14,7 @@ On a thin private market, publishing "only totals" is not private: two of three 
 
 ## 1. The problem: totals leak on thin markets
 
-A total reveals any single contribution to everyone who knows all the others. Canton's sub-transaction privacy hides each trade from non-participants, but markets still need public signals: volume, supply, price. The 2026–2028 Dev Fund roadmap names this tension directly in its *Public verifiability* RFP: an issuer-published aggregate may not be trusted, and disclosing private transactions defeats confidentiality.
+A total reveals any single contribution to everyone who knows all the others. Canton's sub-transaction privacy hides each trade from non-participants, but markets still need public signals: volume, supply, price. Contract-level leaks (divulgence, explicit disclosure, metadata) are covered in [a separate forum thread](https://forum.canton.network/t/auditing-daml-privacy-on-canton-divulgence-explicit-disclosure-and-where-data-leaks/9377); this article looks at the next layer: what leaks from published aggregates. The 2026–2028 Dev Fund roadmap names this tension directly in its *Public verifiability* RFP: an issuer-published aggregate may not be trusted, and disclosing private transactions defeats confidentiality.
 
 Take a tokenized bond traded by three dealers, A, B and C. The market publishes one number a day, total volume.
 
@@ -252,13 +254,13 @@ PYTHONPATH=src python -m cdp.experiments --out results --seeds 200
 python article/make_figures.py        # redraws the figures of this article
 ```
 
-Modules: `data.py` (market generator), `dp.py` (clipping, Laplace mechanism, budget accountant), `attacks.py` (coalition, sparse-insider, averaging and snapshot attacks), `captable.py` (cap-table model, binary-tree and increment-noise continual release), `registers.py` (one aggregate over many registers, threshold and DP release rules), `threshold.py` (threshold release on several metrics), `sensitivity.py` (robustness scenarios), `experiments.py` (E1–E11, CSV and figures). Licence Apache-2.0.
+Modules: `data.py` (market generator), `dp.py` (clipping, Laplace mechanism, budget accountant), `attacks.py` (coalition, sparse-insider, averaging and snapshot attacks), `captable.py` (cap-table model, binary-tree and increment-noise continual release), `registers.py` (one aggregate over many registers, threshold and DP release rules), `threshold.py` (threshold release on several metrics), `segments.py` (per-segment statistics), `sensitivity.py` (robustness scenarios), `experiments.py` (E1–E12, CSV and figures). Licence Apache-2.0.
 
 Sources:
 
 - [Canton Foundation, 2026–2028 Strategic Roadmap and RFPs](https://github.com/canton-foundation/canton-dev-fund) — *Public verifiability* RFP
 - [Canton docs: privacy model](https://docs.canton.network/appdev/deep-dives/privacy-model)
-- [Canton Community Research Grants announcement](https://canton.foundation/introducing-the-canton-community-research-grants/)
+- [Canton Community Research Grants announcement](https://www.canton.network/blog/introducing-the-canton-community-research-grants)
 - Dwork, McSherry, Nissim, Smith (2006), *Calibrating Noise to Sensitivity in Private Data Analysis* — the Laplace mechanism
 - Dwork and Roth (2014), *The Algorithmic Foundations of Differential Privacy* — composition
 - Dwork, Naor, Pitassi, Rothblum (2010), *Differential Privacy Under Continual Observation*; Chan, Shi, Song (2011), *Private and Continual Release of Statistics* — binary-tree mechanism
